@@ -1,7 +1,7 @@
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_http_methods
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from .representations import serialize_activity, serialize_activities, serialize_enrollments, serialize_enrollment, serialize_participant, serialize_participants
 from .models import Activity, Participant, Enrollment
 
@@ -48,6 +48,9 @@ def activity_api_detail(request, activity_id):
         return JsonResponse({"error": "Activity not found"}, status=404)
 
     payload = serialize_activity(activity)
+    payload["available_slots"] = activity.capacity - Enrollment.objects.filter(
+        activity=activity,
+    ).count()
     return JsonResponse({"data": payload})
 
 @require_GET
@@ -158,31 +161,60 @@ def enrollment_api_detail(request, activity_id, participant_id):
         
 @require_http_methods(["PUT"])
 def activity_enrollment_api_put(request, activity_id, participant_id):
-    #inscribe a un participante en una actividad si hay cupo disponible.
+    # PUT es idempotente: repetir la petición no debe crear duplicados.
     try:
         activity = Activity.objects.get(id=activity_id)
-        enrollment = Enrollment.objects.get(activity_id=activity_id, participant_id=participant_id)
+        participant = Participant.objects.get(id=participant_id)
+        enrollment = Enrollment.objects.filter(
+            activity=activity,
+            participant=participant,
+        ).first()
 
-        enrolled_count = Enrollment.objects.filter(activity=activity).exclude(
-            activity_id=activity_id,
-            participant_id=participant_id,
-        ).count()
+        if enrollment is not None:
+            # Una inscripción existente se devuelve sin crear otra fila.
+            other_enrollments = Enrollment.objects.filter(activity=activity).exclude(
+                participant=participant,
+            ).count()
+            if other_enrollments >= activity.capacity:
+                return JsonResponse({
+                    "data": None,
+                    "error": "Activity capacity exceeded"
+                }, status=409)
+
+            return JsonResponse({
+                "data": serialize_enrollment(enrollment),
+                "error": None
+            }, status=200)
+
+        # La disponibilidad se calcula contando las inscripciones persistidas.
+        enrolled_count = Enrollment.objects.filter(activity=activity).count()
         if enrolled_count >= activity.capacity:
             return JsonResponse({
                 "data": None,
                 "error": "Activity capacity exceeded"
             }, status=409)
 
-        payload = serialize_enrollment(enrollment) 
+        # El modelo se modifica sólo después de validar el cupo disponible.
+        enrollment = Enrollment.objects.create(
+            activity=activity,
+            participant=participant,
+        )
+        payload = serialize_enrollment(enrollment)
         return JsonResponse({
             "data": payload,
             "error": None
-        }, status=200)
+        }, status=201)
 
     except Enrollment.DoesNotExist:
         return JsonResponse({
             "data": None,
             "error": "Enrollment not found"
+        }, status=404)
+
+    except Participant.DoesNotExist:
+        return JsonResponse({
+            "data": None,
+            "error": "Participant not found"
         }, status=404)
 
     except Activity.DoesNotExist:
@@ -201,14 +233,18 @@ def activity_enrollment_api_put(request, activity_id, participant_id):
 
 @require_http_methods(["DELETE"])
 def activity_enrollment_api_delete(request, activity_id, participant_id):
-    #elimina la inscripción de un participante en una actividad.
+    # Primero se diferencia una actividad inexistente de una inscripción ausente.
+    if not Activity.objects.filter(id=activity_id).exists():
+        return JsonResponse({
+            "data": None,
+            "error": "Activity not found"
+        }, status=404)
+
     try:
         enrollment = Enrollment.objects.get(activity_id=activity_id, participant_id=participant_id)
         enrollment.delete()
-        return JsonResponse({
-            "data": None,
-            "error": None
-        }, status=204)
+        # DELETE exitoso no devuelve representación, sólo confirma la baja.
+        return HttpResponse(status=204)
 
     except Enrollment.DoesNotExist:
         return JsonResponse({

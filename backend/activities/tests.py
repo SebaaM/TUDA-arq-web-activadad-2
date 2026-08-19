@@ -30,6 +30,22 @@ class ActivityListTests(TestCase):
 
         self.assertEqual(response.status_code, 405)
 
+    def test_activity_detail_includes_available_slots(self):
+        activity = Activity.objects.create(
+            title="Diseño de una API",
+            starts_at=timezone.make_aware(datetime(2026, 3, 23, 18, 0)),
+            capacity=2,
+        )
+        participant = Participant.objects.create(name="Juan García")
+        Enrollment.objects.create(activity=activity, participant=participant)
+
+        response = self.client.get(
+            reverse("activities:api-activity-detail", args=[activity.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["available_slots"], 1)
+
 
 class ActivityEnrollmentPutTests(TestCase):
     def setUp(self):
