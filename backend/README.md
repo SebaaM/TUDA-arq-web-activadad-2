@@ -19,6 +19,15 @@ python manage.py runserver
 
 Abrir <http://127.0.0.1:8000/>.
 
+## Documentación Swagger
+
+Con el servidor iniciado, abrir:
+
+- Página de documentación Jinja2: <http://127.0.0.1:8000/api-docs/>
+- Swagger UI: <http://127.0.0.1:8000/swagger/>
+- Documento OpenAPI JSON: <http://127.0.0.1:8000/swagger.json>
+- ReDoc: <http://127.0.0.1:8000/redoc/>
+
 `seed_activities` se puede ejecutar más de una vez: restaura el mismo conjunto de actividades sin duplicarlas.
 
 ## Comandos útiles
