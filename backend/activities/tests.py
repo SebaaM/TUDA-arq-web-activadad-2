@@ -65,8 +65,9 @@ class ActivityEnrollmentPutTests(TestCase):
         response = self.client.put(
             reverse(
                 "activities:api-enrollment-confirm",
-                args=[self.activity.id, self.participant.id],
+                args=[self.activity.id],
             ),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
             content_type="application/json",
         )
 
@@ -83,11 +84,96 @@ class ActivityEnrollmentPutTests(TestCase):
         response = self.client.put(
             reverse(
                 "activities:api-enrollment-confirm",
-                args=[self.activity.id, self.participant.id],
+                args=[self.activity.id],
             ),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
             content_type="application/json",
         )
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["error"], "Activity capacity exceeded")
         self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 2)
+
+    def test_creates_enrollment_using_participant_header(self):
+        response = self.client.put(
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(
+            Enrollment.objects.filter(
+                activity=self.activity,
+                participant=self.participant,
+            ).exists()
+        )
+
+    def test_rejects_missing_participant_header(self):
+        response = self.client.put(
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejects_unknown_activity(self):
+        response = self.client.put(
+            reverse(
+                "activities:api-enrollment-confirm",
+                args=["00000000-0000-0000-0000-000000000000"],
+            ),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_rejects_unsupported_method(self):
+        response = self.client.post(
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+        )
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_lists_only_the_participant_enrollments(self):
+        other_participant = Participant.objects.create(name="María López")
+        Enrollment.objects.create(activity=self.activity, participant=other_participant)
+        Enrollment.objects.create(activity=self.activity, participant=self.participant)
+
+        response = self.client.get(
+            reverse("activities:api-enrollment-list"),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["data"]), 1)
+        self.assertEqual(
+            response.json()["data"][0]["participant"]["id"],
+            str(self.participant.id),
+        )
+
+    def test_cancels_enrollment_using_participant_header(self):
+        Enrollment.objects.create(activity=self.activity, participant=self.participant)
+
+        response = self.client.delete(
+            reverse("activities:api-enrollment-cancel", args=[self.activity.id]),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(
+            Enrollment.objects.filter(
+                activity=self.activity,
+                participant=self.participant,
+            ).exists()
+        )
+
+    def test_rejects_canceling_unknown_enrollment(self):
+        response = self.client.delete(
+            reverse("activities:api-enrollment-cancel", args=[self.activity.id]),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+        )
+
+        self.assertEqual(response.status_code, 404)
