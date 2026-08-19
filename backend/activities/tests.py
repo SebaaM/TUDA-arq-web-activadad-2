@@ -46,6 +46,22 @@ class ActivityListTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["available_slots"], 1)
 
+    def test_activity_api_collection_uses_common_json_structure(self):
+        activity = Activity.objects.create(
+            title="Diseño de una API",
+            starts_at=timezone.make_aware(datetime(2026, 3, 23, 18, 0)),
+            capacity=2,
+        )
+        participant = Participant.objects.create(name="Juan García")
+        Enrollment.objects.create(activity=activity, participant=participant)
+
+        response = self.client.get(reverse("activities:api-activity-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["error"], None)
+        self.assertEqual(response.json()["data"][0]["id"], str(activity.id))
+        self.assertEqual(response.json()["data"][0]["available_slots"], 1)
+
 
 class ActivityEnrollmentPutTests(TestCase):
     def setUp(self):

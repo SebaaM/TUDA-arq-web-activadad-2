@@ -6,9 +6,11 @@ from .representations import serialize_activity, serialize_activities, serialize
 from .models import Activity, Participant, Enrollment
 
 
+# constante para el nombre del header HTTP que identifica al participante de prueba.
 DEMO_PARTICIPANT_HEADER = "X-Participant-ID"
 
 
+# se usa para obtener el participante de prueba a partir del header HTTP.
 def get_demo_participant(request):
     participant_id = request.headers.get(DEMO_PARTICIPANT_HEADER)
     if not participant_id:
@@ -43,22 +45,22 @@ def activity_api_list(request):
 # @require_http_methods(["GET"])
 @require_GET
 def activities_collection(request):
-    # 405: la colección no admite métodos distintos de GET.
+    # 405: @require_GET rechaza cualquier método distinto de GET.
     activities = Activity.objects.order_by("starts_at")
-    payload = [
-        {
-        "id": str(activity.id),
-        "title": activity.title,
-        "starts_at": activity.starts_at.isoformat(),
-        "capacity": activity.capacity,
-        "available_slots": activity.capacity - Enrollment.objects.filter(
-        activity=activity
-        ).count(),
-        }
-    for activity in activities
-    ]
-    # 200: devuelve la colección JSON con la disponibilidad calculada.
-    return JsonResponse(payload, safe=False)
+    payload = []
+
+    for activity in activities:
+        activity_data = serialize_activity(activity)
+        activity_data["available_slots"] = activity.capacity - Enrollment.objects.filter(
+            activity=activity,
+        ).count()
+        payload.append(activity_data)
+
+    # 200: mantiene el contrato JSON común {data, error} para las colecciones.
+    return JsonResponse({
+        "data": payload,
+        "error": None,
+    }, status=200)
 
 @require_GET
 def activity_api_detail(request, activity_id):
