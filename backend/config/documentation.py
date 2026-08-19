@@ -30,8 +30,7 @@ API_SCHEMA = {
             "get": {"summary": "Obtener una inscripción", "parameters": [{"$ref": "#/components/parameters/EnrollmentId"}], "responses": {"200": {"description": "Inscripción encontrada"}, "404": {"description": "Inscripción inexistente"}}}
         },
         "/api/v1/me/enrollments/{activity_id}/": {
-            "put": {"summary": "Inscribirse en una actividad", "parameters": [{"$ref": "#/components/parameters/ActivityId"}, {"$ref": "#/components/parameters/ParticipantHeader"}], "responses": {"201": {"description": "Inscripción creada"}, "200": {"description": "Inscripción ya existente"}, "409": {"description": "Sin cupos"}}},
-            "delete": {"summary": "Cancelar una inscripción", "parameters": [{"$ref": "#/components/parameters/ActivityId"}, {"$ref": "#/components/parameters/ParticipantHeader"}], "responses": {"204": {"description": "Inscripción cancelada"}, "404": {"description": "Inscripción inexistente"}}}
+            "put": {"summary": "Inscribirse en una actividad", "parameters": [{"$ref": "#/components/parameters/ActivityId"}, {"$ref": "#/components/parameters/ParticipantHeader"}], "responses": {"201": {"description": "Inscripción creada"}, "200": {"description": "Inscripción ya existente"}, "409": {"description": "Sin cupos"}}}
         },
         "/api/v1/me/enrollments/{activity_id}/cancel/": {
             "delete": {"summary": "Cancelar mi inscripción", "parameters": [{"$ref": "#/components/parameters/ActivityId"}, {"$ref": "#/components/parameters/ParticipantHeader"}], "responses": {"204": {"description": "Inscripción cancelada"}}}
