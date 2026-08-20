@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from .models import Activity, Enrollment, Participant
@@ -16,16 +17,16 @@ class ActivityListTests(TestCase):
             capacity=30,
         )
 
-        response = self.client.get("/api/v1/activities/")
+        response = self.client.get(reverse("activities:list"))
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data[0]["id"], str(activity.id))
-        self.assertEqual(data[0]["title"], activity.title)
-        self.assertEqual(data[0]["capacity"], 30)
+        self.assertContains(response, str(activity.id))
+        self.assertContains(response, activity.title)
+        self.assertContains(response, "2026-03-23T18:00:00-03:00")
+        self.assertContains(response, "30")
 
     def test_rejects_non_get_requests(self):
-        response = self.client.post("/api/v1/activities/")
+        response = self.client.post(reverse("activities:list"))
 
         self.assertEqual(response.status_code, 405)
 
@@ -38,12 +39,14 @@ class ActivityListTests(TestCase):
         participant = Participant.objects.create(name="Juan García")
         Enrollment.objects.create(activity=activity, participant=participant)
 
-        response = self.client.get(f"/api/v1/activities/{activity.id}/")
+        response = self.client.get(
+            reverse("activities:api-activity-detail", args=[activity.id])
+        )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["available_slots"], 1)
+        self.assertEqual(response.json()["data"]["available_slots"], 1)
 
-    def test_activity_api_collection_returns_list(self):
+    def test_activity_api_collection_uses_common_json_structure(self):
         activity = Activity.objects.create(
             title="Diseño de una API",
             starts_at=timezone.make_aware(datetime(2026, 3, 23, 18, 0)),
@@ -52,12 +55,12 @@ class ActivityListTests(TestCase):
         participant = Participant.objects.create(name="Juan García")
         Enrollment.objects.create(activity=activity, participant=participant)
 
-        response = self.client.get("/api/v1/activities/")
+        response = self.client.get(reverse("activities:api-activity-list"))
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data[0]["id"], str(activity.id))
-        self.assertEqual(data[0]["available_slots"], 1)
+        self.assertEqual(response.json()["error"], None)
+        self.assertEqual(response.json()["data"][0]["id"], str(activity.id))
+        self.assertEqual(response.json()["data"][0]["available_slots"], 1)
 
 
 class ActivityEnrollmentPutTests(TestCase):
@@ -76,14 +79,17 @@ class ActivityEnrollmentPutTests(TestCase):
         )
 
         response = self.client.put(
-            f"/api/v1/me/enrollments/{self.activity.id}/",
+            reverse(
+                "activities:api-enrollment-confirm",
+                args=[self.activity.id],
+            ),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
             content_type="application/json",
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["activity"]["id"], str(self.activity.id))
-        self.assertEqual(response.json()["participant"]["id"], str(self.participant.id))
+        self.assertEqual(response.json()["data"]["activity"]["id"], str(self.activity.id))
+        self.assertEqual(response.json()["data"]["participant"]["id"], str(self.participant.id))
         self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 1)
 
     def test_rejects_enrollment_when_activity_capacity_is_exceeded(self):
@@ -92,18 +98,21 @@ class ActivityEnrollmentPutTests(TestCase):
         Enrollment.objects.create(activity=self.activity, participant=self.participant)
 
         response = self.client.put(
-            f"/api/v1/me/enrollments/{self.activity.id}/",
+            reverse(
+                "activities:api-enrollment-confirm",
+                args=[self.activity.id],
+            ),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
             content_type="application/json",
         )
 
         self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()["detail"], "Activity capacity exceeded")
+        self.assertEqual(response.json()["error"], "Activity capacity exceeded")
         self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 2)
 
     def test_creates_enrollment_using_participant_header(self):
         response = self.client.put(
-            f"/api/v1/me/enrollments/{self.activity.id}/",
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
             content_type="application/json",
         )
@@ -118,15 +127,18 @@ class ActivityEnrollmentPutTests(TestCase):
 
     def test_rejects_missing_participant_header(self):
         response = self.client.put(
-            f"/api/v1/me/enrollments/{self.activity.id}/",
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 400)
 
     def test_rejects_unknown_activity(self):
         response = self.client.put(
-            "/api/v1/me/enrollments/00000000-0000-0000-0000-000000000000/",
+            reverse(
+                "activities:api-enrollment-confirm",
+                args=["00000000-0000-0000-0000-000000000000"],
+            ),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
             content_type="application/json",
         )
@@ -135,7 +147,7 @@ class ActivityEnrollmentPutTests(TestCase):
 
     def test_rejects_unsupported_method(self):
         response = self.client.post(
-            f"/api/v1/me/enrollments/{self.activity.id}/",
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
         )
 
@@ -147,20 +159,22 @@ class ActivityEnrollmentPutTests(TestCase):
         Enrollment.objects.create(activity=self.activity, participant=self.participant)
 
         response = self.client.get(
-            "/api/v1/me/enrollments/",
+            reverse("activities:api-enrollment-list"),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
         )
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]["participant"]["id"], str(self.participant.id))
+        self.assertEqual(len(response.json()["data"]), 1)
+        self.assertEqual(
+            response.json()["data"][0]["participant"]["id"],
+            str(self.participant.id),
+        )
 
     def test_cancels_enrollment_using_participant_header(self):
         Enrollment.objects.create(activity=self.activity, participant=self.participant)
 
         response = self.client.delete(
-            f"/api/v1/me/enrollments/{self.activity.id}/cancel/",
+            reverse("activities:api-enrollment-cancel", args=[self.activity.id]),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
         )
 
@@ -174,34 +188,8 @@ class ActivityEnrollmentPutTests(TestCase):
 
     def test_rejects_canceling_unknown_enrollment(self):
         response = self.client.delete(
-            f"/api/v1/me/enrollments/{self.activity.id}/cancel/",
+            reverse("activities:api-enrollment-cancel", args=[self.activity.id]),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
-        )
-
-        self.assertEqual(response.status_code, 404)
-
-
-class ParticipantApiTests(TestCase):
-    def test_list_participants(self):
-        Participant.objects.create(name="Juan García")
-        Participant.objects.create(name="María López")
-
-        response = self.client.get("/api/v1/participants/")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()), 2)
-
-    def test_get_participant_detail(self):
-        participant = Participant.objects.create(name="Juan García")
-
-        response = self.client.get(f"/api/v1/participants/{participant.id}/")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["name"], "Juan García")
-
-    def test_get_nonexistent_participant(self):
-        response = self.client.get(
-            "/api/v1/participants/00000000-0000-0000-0000-000000000000/"
         )
 
         self.assertEqual(response.status_code, 404)

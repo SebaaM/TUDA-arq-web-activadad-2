@@ -14,7 +14,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "ninja",
+    "rest_framework",
     "activities",
 ]
 
@@ -70,4 +70,7 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-NINJA_SKIP_SCHEMA_EXPORT = False
+SWAGGER_SETTINGS = {
+    "DEFAULT_INFO": "config.swagger.openapi_info",
+    "USE_SESSION_AUTH": False,
+}
