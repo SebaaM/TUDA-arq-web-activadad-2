@@ -9,12 +9,11 @@ interface Activity {
 }
 
 async function fetchActivities(): Promise<Activity[]> {
-  const response = await fetch('/api/activities/')
+  const response = await fetch('/api/v1/activities/')
   if (!response.ok) {
     throw new Error('Error al obtener las actividades')
   }
-  const payload = await response.json()
-  return payload.data
+  return response.json()
 }
 
 const activitiesPromise = fetchActivities()

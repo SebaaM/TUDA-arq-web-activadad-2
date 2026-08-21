@@ -133,6 +133,19 @@ class ActivityEnrollmentPutTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_rejects_malformed_participant_header(self):
+        response = self.client.put(
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
+            HTTP_X_PARTICIPANT_ID="not-a-uuid",
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "data": None,
+            "error": "Invalid participant identity",
+        })
+
     def test_rejects_unknown_activity(self):
         response = self.client.put(
             reverse(

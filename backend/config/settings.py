@@ -14,7 +14,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "rest_framework",
     "activities",
 ]
 
@@ -70,7 +69,3 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-SWAGGER_SETTINGS = {
-    "DEFAULT_INFO": "config.swagger.openapi_info",
-    "USE_SESSION_AUTH": False,
-}

@@ -23,10 +23,8 @@ Abrir <http://127.0.0.1:8000/>.
 
 Con el servidor iniciado, abrir:
 
-- Página de documentación Jinja2: <http://127.0.0.1:8000/api-docs/>
-- Swagger UI: <http://127.0.0.1:8000/swagger/>
-- Documento OpenAPI JSON: <http://127.0.0.1:8000/swagger.json>
-- ReDoc: <http://127.0.0.1:8000/redoc/>
+- Swagger UI: <http://127.0.0.1:8000/api/docs>
+- Documento OpenAPI JSON: <http://127.0.0.1:8000/api/openapi.json>
 
 `seed_activities` se puede ejecutar más de una vez: restaura el mismo conjunto de actividades sin duplicarlas.
 
