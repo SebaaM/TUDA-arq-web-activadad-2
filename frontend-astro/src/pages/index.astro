@@ -1,0 +1,45 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Inicio" mode="mixed" active="home">
+  <section class="page-intro">
+    <span class="kicker">laboratorio · arquitectura de frontends</span>
+    <h1 class="page-title">
+      Dos capas, una sola página: lo que el build produjo y lo que el
+      navegador actualiza.
+    </h1>
+    <p class="lede">
+      Este sitio es HTML estático generado por Astro durante el build. Los datos
+      base de las actividades se consultaron una única vez desde el servidor y
+      quedaron impresos en los archivos de <code>dist/</code>. La inscripción,
+      en cambio, vive en una isla React: se consulta y se modifica en tu
+      navegador, con JavaScript.
+    </p>
+  </section>
+
+  <div class="stack">
+    <section class="layer layer--static" aria-labelledby="evidence-build">
+      <span class="layer__tag" id="evidence-build">BUILD EVIDENCE</span>
+      <p>
+        El contenido marcado en <strong>verde lima</strong> fue obtenido desde
+        la API durante el build y quedó incluido en el HTML. No necesita
+        JavaScript: podés desactivarlo y seguirá visible.
+      </p>
+    </section>
+
+    <section class="layer layer--client" aria-labelledby="evidence-client">
+      <span class="layer__tag" id="evidence-client">CLIENT ISLAND</span>
+      <p>
+        El contenido marcado en <strong>cian</strong> aparece recién cuando el
+        navegador ejecuta JavaScript y consulta la API. Mirá la pestaña Network:
+        vas a ver las llamadas a <code>/me/enrollments/</code> que no existen
+        en el HTML inicial.
+      </p>
+    </section>
+
+    <section aria-label="Accesos">
+      <a class="btn" href="/activities/">Ver actividades →</a>
+    </section>
+  </div>
+</BaseLayout>

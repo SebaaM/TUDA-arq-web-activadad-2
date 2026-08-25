@@ -1,0 +1,74 @@
+---
+import EnrollmentPanel from "../../components/EnrollmentPanel";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getActivities } from "../../lib/api";
+import { availabilityLabel, formatDateTime } from "../../lib/format";
+import type { Activity } from "../../types/activity";
+
+// getStaticPaths consulta SOLO /activities/. Nunca las inscripciones:
+// eso es estado del navegador y vive en la isla client-side.
+export async function getStaticPaths() {
+  const result = await getActivities();
+  if (!result.ok) return [];
+
+  return result.data.map((activity) => ({
+    params: { id: activity.id },
+    props: { activity },
+  }));
+}
+
+interface Props {
+  activity: Activity;
+}
+
+const { activity } = Astro.props;
+const availability = availabilityLabel(activity);
+---
+
+<BaseLayout title={activity.title} mode="mixed" active="activities">
+  <a class="backlink" href="/activities/">← Volver al listado</a>
+
+  <div class="stack">
+    <section class="layer layer--static" aria-labelledby="static-tag">
+      <span class="layer__tag" id="static-tag">Static content</span>
+      <p class="layer__hint">
+        Datos base generados en build · incluidos en el HTML de dist/.
+      </p>
+
+      <h1 class="page-title" style="margin-top: 0.9rem;">{activity.title}</h1>
+
+      <dl class="detail-meta">
+        <div>
+          <dt>ID de actividad</dt>
+          <dd><code>{activity.id}</code></dd>
+        </div>
+        <div>
+          <dt>Fecha y hora</dt>
+          <dd>
+            <time datetime={activity.starts_at}>
+              {formatDateTime(activity.starts_at)}
+            </time>
+          </dd>
+        </div>
+        <div>
+          <dt>Capacidad</dt>
+          <dd>{activity.capacity} lugares</dd>
+        </div>
+        <div>
+          <dt>Cupos disponibles (en build)</dt>
+          <dd>
+            {activity.available_slots}
+            <span class={`badge badge--${availability.tone}`} style="margin-left: 0.6rem;">
+              {availability.label}
+            </span>
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section aria-labelledby="client-heading">
+      <h2 class="kicker" id="client-heading">Client island</h2>
+      <EnrollmentPanel client:load activityId={activity.id} />
+    </section>
+  </div>
+</BaseLayout>

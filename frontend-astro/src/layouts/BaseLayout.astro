@@ -1,0 +1,82 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Capa dominante de la página, para el indicador del encabezado. */
+  mode?: "build" | "client" | "mixed";
+  active?: "home" | "activities" | null;
+}
+
+const {
+  title,
+  description = "Laboratorio de arquitectura web: contenido estático generado en build más una isla interactiva que consulta la API desde el navegador.",
+  mode = "build",
+  active = null,
+} = Astro.props;
+
+const modeLabel =
+  mode === "build"
+    ? { key: "BUILD", rest: "/ contenido estático" }
+    : mode === "client"
+      ? { key: "CLIENT", rest: "/ estado dinámico" }
+      : { key: "BUILD + CLIENT", rest: "/ híbrido" };
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <title>{title} · TUDA Arquitectura Web</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a class="brand" href="/">
+          <span class="brand__name">TUDA<em>_</em>lab</span>
+          <span class="brand__tag">arquitectura web · 2026</span>
+        </a>
+        <nav class="site-nav" aria-label="Navegación principal">
+          <a href="/" aria-current={active === "home" ? "page" : undefined}>
+            inicio
+          </a>
+          <a
+            href="/activities/"
+            aria-current={active === "activities" ? "page" : undefined}
+          >
+            actividades
+          </a>
+        </nav>
+        <p class="mode-pill" title="Qué parte de esta página es estática y cuál se hidrata">
+          modo: <strong data-mode={mode}>{modeLabel.key}</strong>
+          <span>{modeLabel.rest}</span>
+        </p>
+      </div>
+    </header>
+
+    <main class="container">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container site-footer__inner">
+        <span>
+          frontend-astro · sitio estático con isla React (<code>client:load</code>)
+        </span>
+        <span class="legend legend--build">HTML generado en build</span>
+        <span class="legend legend--client">inscripción viva en el navegador</span>
+      </div>
+    </footer>
+  </body>
+</html>

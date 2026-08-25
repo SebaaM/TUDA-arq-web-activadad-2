@@ -1,0 +1,83 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getActivities } from "../../lib/api";
+import { availabilityLabel, formatDateTime, formatSlots } from "../../lib/format";
+import type { Activity } from "../../types/activity";
+
+// GET /api/v1/activities/ durante la generación del sitio.
+// Si la API está apagada el build no falla: se genera un estado vacío
+// explicativo para poder comparar ambos escenarios en el laboratorio.
+const result = await getActivities();
+const activities: Activity[] = result.ok ? result.data : [];
+const buildFailureMessage = result.ok
+  ? null
+  : `La API no respondió durante el build (${
+      result.error.status !== null ? `HTTP ${result.error.status}` : "sin conexión"
+    }). No hay datos incluidos en este HTML. Levantá el backend y volvé a ejecutar pnpm build.`;
+---
+
+<BaseLayout title="Actividades" mode="build" active="activities">
+  <section class="page-intro">
+    <span class="kicker">capa estática · generada en build</span>
+    <h1 class="page-title">Actividades</h1>
+    <p class="lede">
+      Este listado se obtuvo con <code>GET /api/v1/activities/</code> una sola
+      vez, mientras Astro construía el sitio. Los datos ya viven dentro de este
+      HTML: recargar siempre muestra lo mismo hasta que se ejecute un nuevo
+      build.
+    </p>
+  </section>
+
+  <section class="layer layer--static" aria-labelledby="list-evidence">
+    <span class="layer__tag" id="list-evidence">Generado en build</span>
+
+    {
+      buildFailureMessage ? (
+        <div class="alert alert--error" role="alert">
+          <span aria-hidden="true">✕</span>
+          <span>{buildFailureMessage}</span>
+        </div>
+      ) : activities.length === 0 ? (
+        <p class="status-line">
+          <span class="status-dot status-dot--idle" aria-hidden="true" />
+          La API respondió correctamente pero no hay actividades cargadas.
+        </p>
+      ) : (
+        <>
+          <p class="layer__hint">
+            Datos incluidos en el HTML producido · sin JavaScript necesario para
+            leerlos.
+          </p>
+          <ul class="activity-grid">
+            {activities.map((activity) => {
+              const availability = availabilityLabel(activity);
+              return (
+                <li>
+                  <a
+                    class="activity-card"
+                    href={`/activities/${activity.id}/`}
+                  >
+                    <span class={`badge badge--${availability.tone}`}>
+                      {availability.label}
+                    </span>
+                    <h2 class="activity-card__title">{activity.title}</h2>
+                    <div class="activity-card__meta">
+                      <time datetime={activity.starts_at}>
+                        {formatDateTime(activity.starts_at)}
+                      </time>
+                      <span>
+                        Capacidad: {activity.capacity} ·{" "}
+                        {formatSlots(activity.available_slots, activity.capacity)}
+                      </span>
+                    </div>
+                    <span class="activity-card__go">Ver detalle</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )
+    }
+  </section>
+</BaseLayout>
