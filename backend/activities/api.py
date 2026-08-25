@@ -92,15 +92,21 @@ api = NinjaAPI(
 def get_demo_participant(participant_id: Optional[str]) -> Optional[Participant]:
     """Obtiene el participante de prueba sin alterar el contrato de errores."""
     if not participant_id:
+        # La ausencia del header se trata igual que una identidad inválida para
+        # evitar revelar datos o permitir operaciones sin participante.
         return None
 
     try:
         return Participant.objects.get(id=participant_id)
     except (Participant.DoesNotExist, ValidationError, ValueError):
+        # El UUID puede estar mal formado o no corresponder a un participante;
+        # ambos casos se convierten en la respuesta 400 del endpoint consumidor.
         return None
 
 
 def serialize_activity_detail(activity: Activity) -> dict:
+    # El cupo se calcula al consultar para que la respuesta refleje las
+    # inscripciones actuales, incluida la actividad sin inscripciones.
     payload = serialize_activity(activity)
     payload["available_slots"] = activity.capacity - Enrollment.objects.filter(
         activity=activity
@@ -116,6 +122,7 @@ def serialize_activity_detail(activity: Activity) -> dict:
     url_name="api-activity-list",
 )
 def activities_collection(request):
+    # GET es safe (solo lectura) e idempotente: repetirlo no modifica datos.
     activities = Activity.objects.order_by("starts_at")
     return 200, {
         "data": [serialize_activity_detail(activity) for activity in activities],
@@ -131,6 +138,8 @@ def activities_collection(request):
     url_name="api-activity-detail",
 )
 def activity_api_detail(request, activity_id: UUID):
+    # GET es safe e idempotente. Un UUID válido sin coincidencia produce 404;
+    # la conversión del parámetro inválido la resuelve Django Ninja.
     try:
         activity = Activity.objects.get(id=activity_id)
     except Activity.DoesNotExist:
@@ -147,6 +156,8 @@ def activity_api_detail(request, activity_id: UUID):
     url_name="api-participant-list",
 )
 def participant_api_list(request):
+    # GET es safe e idempotente. Se conservan respuestas diferenciadas para
+    # errores de validación/consulta (400/404) y fallos no previstos (500).
     try:
         return 200, {"data": serialize_participants(Participant.objects.all()), "error": None}
     except ObjectDoesNotExist as exc:
@@ -166,6 +177,8 @@ def participant_api_list(request):
     url_name="api-participant-detail",
 )
 def participant_api_detail(request, participant_id: UUID):
+    # GET es safe e idempotente. La ausencia del participante es 404 y una
+    # excepción inesperada se informa como 500 sin cambiar el recurso.
     try:
         participant = Participant.objects.get(id=participant_id)
         return 200, {"data": serialize_participant(participant), "error": None}
@@ -185,6 +198,8 @@ def participant_api_detail(request, participant_id: UUID):
 def enrollment_api_list(
     request, x_participant_id: Optional[str] = Header(None, alias=DEMO_PARTICIPANT_HEADER)
 ):
+    # GET es safe e idempotente: solo consulta las inscripciones de la
+    # identidad indicada. Sin header o con header inválido se responde 400.
     participant = get_demo_participant(x_participant_id)
     if participant is None:
         return 400, {"data": None, "error": "Invalid participant identity"}
@@ -201,6 +216,8 @@ def enrollment_api_list(
     url_name="api-enrollment-detail",
 )
 def enrollment_api_detail(request, id: int):
+    # GET es safe e idempotente. El identificador inexistente se responde con
+    # 404 y no se permite que una excepción de consulta llegue al cliente.
     try:
         enrollment = Enrollment.objects.get(id=id)
         return 200, {"data": serialize_enrollment(enrollment), "error": None}
@@ -222,6 +239,10 @@ def activity_enrollment_api_put(
     activity_id: UUID,
     x_participant_id: Optional[str] = Header(None, alias=DEMO_PARTICIPANT_HEADER),
 ):
+    # PUT no es safe porque puede crear una inscripción, pero es idempotente en
+    # repeticiones secuenciales: devuelve la inscripción existente en vez de
+    # crear otra. La identidad inválida siempre es 400; la concurrencia no se
+    # serializa aquí y requeriría una transacción para una garantía más fuerte.
     participant = get_demo_participant(x_participant_id)
     if participant is None:
         return 400, {"data": None, "error": "Invalid participant identity"}
@@ -233,6 +254,8 @@ def activity_enrollment_api_put(
         ).first()
 
         if enrollment is not None:
+            # La restricción única del modelo garantiza una inscripción por
+            # pareja. Si el estado ya estaba sobrecapacidad, se informa 409.
             other_enrollments = Enrollment.objects.filter(activity=activity).exclude(
                 participant=participant
             ).count()
@@ -240,10 +263,13 @@ def activity_enrollment_api_put(
                 return 409, {"data": None, "error": "Activity capacity exceeded"}
             return 200, {"data": serialize_enrollment(enrollment), "error": None}
 
+        # Se verifica el cupo antes de insertar; una actividad completa no
+        # acepta nuevas inscripciones y conserva su estado sin cambios.
         if Enrollment.objects.filter(activity=activity).count() >= activity.capacity:
             return 409, {"data": None, "error": "Activity capacity exceeded"}
 
         enrollment = Enrollment.objects.create(activity=activity, participant=participant)
+        # La primera solicitud crea el recurso y devuelve su representación.
         return 201, {"data": serialize_enrollment(enrollment), "error": None}
     except Activity.DoesNotExist:
         return 404, {"data": None, "error": "Activity not found"}
@@ -263,6 +289,9 @@ def activity_enrollment_api_delete(
     activity_id: UUID,
     x_participant_id: Optional[str] = Header(None, alias=DEMO_PARTICIPANT_HEADER),
 ):
+    # DELETE no es safe porque modifica el estado, pero es idempotente respecto
+    # del estado final: la inscripción queda eliminada tras la primera llamada.
+    # Una repetición sin inscripción se informa 404 para hacer visible el estado.
     participant = get_demo_participant(x_participant_id)
     if participant is None:
         return 400, {"data": None, "error": "Invalid participant identity"}
@@ -273,6 +302,7 @@ def activity_enrollment_api_delete(
     try:
         enrollment = Enrollment.objects.get(activity_id=activity_id, participant=participant)
         enrollment.delete()
+        # 204 confirma que la eliminación se realizó sin cuerpo de respuesta.
         return 204, None
     except Enrollment.DoesNotExist:
         return 404, {"data": None, "error": "Enrollment not found"}

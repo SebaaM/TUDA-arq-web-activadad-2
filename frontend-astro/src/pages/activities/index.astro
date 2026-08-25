@@ -4,6 +4,8 @@ import { getActivities } from "../../lib/api";
 import { availabilityLabel, formatDateTime, formatSlots } from "../../lib/format";
 import type { Activity } from "../../types/activity";
 
+// Frontmatter de Astro: se ejecuta en el servidor durante la generación del
+// sitio, no en cada visita del navegador. El resultado queda embebido en HTML.
 // GET /api/v1/activities/ durante la generación del sitio.
 // Si la API está apagada el build no falla: se genera un estado vacío
 // explicativo para poder comparar ambos escenarios en el laboratorio.
