@@ -164,3 +164,20 @@ muestra la diferencia entre HTML generado en build e interactividad hidratada
 por Astro. Para observar la arquitectura híbrida, desactivar JavaScript deja
 visible el contenido estático de actividades, mientras la isla de inscripción
 queda en su estado inicial.
+
+## Trazabilidad de interacciones
+
+La rama `api-correlacion` agrega correlación transversal a la API sin crear
+v3 ni modificar los contratos v1/v2:
+
+- `X-Correlation-ID` es opcional en request y obligatorio en response. Si el
+  cliente envía un valor, la API lo conserva exactamente; si no, genera un UUID.
+- Los logs usan un schema estructurado por eventos (`request_received`,
+  `participant_auth_checked`, `activity_lookup`, `enrollment_created`,
+  `enrollment_reused`, `enrollment_rejected`, `enrollment_cancelled`,
+  `request_completed`) con campos estables y el mismo `correlation_id`.
+- El mismo identificador permite reconstruir entrada, decisión y salida de una
+  interacción (por ejemplo `demo-42` en `request_received`, `enrollment_created`
+  y `request_completed=201`).
+- No se registran secretos ni payloads; el detalle del contrato está en
+  `backend/README.md`.

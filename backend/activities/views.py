@@ -7,6 +7,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from correlation.log import log_event
+
 from .models import Activity, Enrollment, Participant
 from .serializers import (
     ActivitySerializer,
@@ -97,7 +99,9 @@ def participant_not_found_error() -> Response:
 def authenticate_participant(request):
     participant = get_demo_participant(request.headers.get(DEMO_PARTICIPANT_HEADER))
     if participant is None:
+        log_event("participant_auth_checked", result="missing")
         return None, authentication_error()
+    log_event("participant_auth_checked", result="ok")
     return participant, None
 
 

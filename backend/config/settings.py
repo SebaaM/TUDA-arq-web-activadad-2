@@ -16,10 +16,12 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "drf_spectacular",
+    "correlation",
     "activities",
 ]
 
 MIDDLEWARE = [
+    "correlation.middleware.CorrelationMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -56,6 +58,29 @@ DATABASES = {
 }
 
 AUTH_PASSWORD_VALIDATORS = []
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "trace": {
+            "format": "%(message)s",
+        },
+    },
+    "handlers": {
+        "trace_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "trace",
+        },
+    },
+    "loggers": {
+        "tuda.trace": {
+            "handlers": ["trace_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
 
 LANGUAGE_CODE = "es-ar"
 TIME_ZONE = "America/Argentina/Ushuaia"

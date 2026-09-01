@@ -3,6 +3,8 @@ from typing import Optional, Tuple
 from django.core.exceptions import ValidationError
 from django.db.models import Count
 
+from correlation.log import log_event
+
 from .models import Activity, Enrollment, Participant
 
 
@@ -32,11 +34,23 @@ def get_activities_with_availability():
 
 def get_activity_or_404(activity_id) -> Activity:
     try:
-        return Activity.objects.annotate(
+        activity = Activity.objects.annotate(
             enrolled_count=Count("enrollment")
         ).get(id=activity_id)
     except (Activity.DoesNotExist, ValidationError, ValueError):
+        log_event(
+            "activity_lookup",
+            result="not_found",
+            activity_id=str(activity_id),
+        )
         raise ActivityNotFoundError() from None
+
+    log_event(
+        "activity_lookup",
+        result="found",
+        activity_id=str(activity.id),
+    )
+    return activity
 
 
 def activity_exists(activity_id) -> bool:
@@ -51,15 +65,40 @@ def create_or_get_enrollment(
     ).first()
 
     if enrollment is not None:
+        log_event(
+            "enrollment_reused",
+            result="reused",
+            activity_id=str(activity.id),
+            participant_id=str(participant.id),
+        )
         return enrollment, False
 
     if Enrollment.objects.filter(activity=activity).count() >= activity.capacity:
+        log_event(
+            "enrollment_rejected",
+            result="capacity_exhausted",
+            activity_id=str(activity.id),
+            participant_id=str(participant.id),
+        )
         raise CapacityExhaustedError()
 
-    return Enrollment.objects.create(activity=activity, participant=participant), True
+    enrollment = Enrollment.objects.create(activity=activity, participant=participant)
+    log_event(
+        "enrollment_created",
+        result="created",
+        activity_id=str(activity.id),
+        participant_id=str(participant.id),
+    )
+    return enrollment, True
 
 
-def delete_enrollment_if_exists(activity, participant) -> None:
-    Enrollment.objects.filter(
-        activity=activity, participant=participant
+def delete_enrollment_if_exists(activity_id, participant) -> None:
+    deleted_count, _ = Enrollment.objects.filter(
+        activity=activity_id, participant=participant
     ).delete()
+    log_event(
+        "enrollment_cancelled",
+        result="cancelled" if deleted_count else "not_enrolled",
+        activity_id=str(activity_id),
+        participant_id=str(participant.id),
+    )
