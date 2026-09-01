@@ -1,6 +1,6 @@
 # API de actividades
 
-API REST del proyecto TUDA implementada con **Django Ninja**. La especificación OpenAPI y Swagger UI se generan a partir de los esquemas y respuestas declarados en los endpoints.
+API REST del proyecto TUDA implementada con **Django REST Framework** y documentada con **drf-spectacular**. La especificación OpenAPI y Swagger UI se generan a partir de los serializadores y vistas DRF.
 
 ## Datos básicos
 
