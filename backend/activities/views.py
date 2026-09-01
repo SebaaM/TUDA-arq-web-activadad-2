@@ -1,17 +1,30 @@
-from typing import Optional
-
 from django.core.exceptions import ValidationError
-from django.db.models import Count
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Activity, Enrollment, Participant
-from .serializers import ActivitySerializer, EnrollmentSerializer, ErrorSerializer
+from .serializers import (
+    ActivitySerializer,
+    ActivitySerializerV1,
+    ActivityV2Serializer,
+    EnrollmentSerializer,
+    ErrorSerializer,
+)
+from .services import (
+    ActivityNotFoundError,
+    CapacityExhaustedError,
+    activity_exists,
+    create_or_get_enrollment,
+    delete_enrollment_if_exists,
+    get_activities_with_availability,
+    get_activity_or_404,
+    get_demo_participant,
+)
 
 
 DEMO_PARTICIPANT_HEADER = "X-Participant-ID"
@@ -45,16 +58,6 @@ METHOD_NOT_ALLOWED = OpenApiResponse(description="Método no permitido.")
 NO_CONTENT = OpenApiResponse(description="Inscripción cancelada.")
 
 
-def get_demo_participant(participant_id: Optional[str]) -> Optional[Participant]:
-    if not participant_id:
-        return None
-
-    try:
-        return Participant.objects.get(id=participant_id)
-    except (Participant.DoesNotExist, ValidationError, ValueError):
-        return None
-
-
 def error(code: str, message: str, http_status: int) -> Response:
     return Response({"code": code, "message": message}, status=http_status)
 
@@ -75,6 +78,29 @@ def activity_not_found_error() -> Response:
     )
 
 
+def capacity_exhausted_error() -> Response:
+    return error(
+        "capacity_exhausted",
+        "No hay lugares disponibles.",
+        status.HTTP_409_CONFLICT,
+    )
+
+
+def participant_not_found_error() -> Response:
+    return error(
+        "participant_not_found",
+        "El participante no existe.",
+        status.HTTP_404_NOT_FOUND,
+    )
+
+
+def authenticate_participant(request):
+    participant = get_demo_participant(request.headers.get(DEMO_PARTICIPANT_HEADER))
+    if participant is None:
+        return None, authentication_error()
+    return participant, None
+
+
 @require_GET
 def activity_list(request):
     activities = Activity.objects.all()
@@ -86,24 +112,26 @@ def activity_list(request):
 
 
 class ActivityListView(APIView):
+    serializer_class = ActivitySerializerV1
+
     @extend_schema(
         operation_id="listActivities",
         summary="Listar actividades",
         description="Devuelve todas las actividades ordenadas por fecha de inicio, con cupos disponibles.",
         tags=["Activities"],
         responses={
-            200: ActivitySerializer(many=True),
+            200: ActivitySerializerV1(many=True),
             405: METHOD_NOT_ALLOWED,
         },
     )
     def get(self, request):
-        activities = Activity.objects.annotate(
-            enrolled_count=Count("enrollment")
-        ).order_by("starts_at")
-        return Response(ActivitySerializer(activities, many=True).data)
+        activities = get_activities_with_availability()
+        return Response(self.serializer_class(activities, many=True).data)
 
 
 class ActivityDetailView(APIView):
+    serializer_class = ActivitySerializerV1
+
     @extend_schema(
         operation_id="getActivity",
         summary="Obtener una actividad",
@@ -111,20 +139,18 @@ class ActivityDetailView(APIView):
         tags=["Activities"],
         parameters=[ACTIVITY_ID_PARAMETER],
         responses={
-            200: ActivitySerializer(),
+            200: ActivitySerializerV1(),
             404: ErrorSerializer,
             405: METHOD_NOT_ALLOWED,
         },
     )
     def get(self, request, activity_id):
         try:
-            activity = Activity.objects.annotate(
-                enrolled_count=Count("enrollment")
-            ).get(id=activity_id)
-        except Activity.DoesNotExist:
+            activity = get_activity_or_404(activity_id)
+        except ActivityNotFoundError:
             return activity_not_found_error()
 
-        return Response(ActivitySerializer(activity).data)
+        return Response(self.serializer_class(activity).data)
 
 
 class ParticipantListView(APIView):
@@ -159,11 +185,7 @@ class ParticipantDetailView(APIView):
         try:
             participant = Participant.objects.get(id=participant_id)
         except (Participant.DoesNotExist, ValidationError, ValueError):
-            return error(
-                "participant_not_found",
-                "El participante no existe.",
-                status.HTTP_404_NOT_FOUND,
-            )
+            return participant_not_found_error()
         return Response({"id": str(participant.id), "name": participant.name})
 
 
@@ -184,9 +206,9 @@ class EnrollmentListView(APIView):
         },
     )
     def get(self, request):
-        participant = get_demo_participant(request.headers.get(DEMO_PARTICIPANT_HEADER))
+        participant, auth_error = authenticate_participant(request)
         if participant is None:
-            return authentication_error()
+            return auth_error
 
         enrollments = Enrollment.objects.filter(participant=participant)
         return Response(EnrollmentSerializer(enrollments, many=True).data)
@@ -210,33 +232,23 @@ class ActivityEnrollmentView(APIView):
         },
     )
     def put(self, request, activity_id):
-        participant = get_demo_participant(request.headers.get(DEMO_PARTICIPANT_HEADER))
+        participant, auth_error = authenticate_participant(request)
         if participant is None:
-            return authentication_error()
+            return auth_error
 
         try:
-            activity = Activity.objects.get(id=activity_id)
-        except Activity.DoesNotExist:
+            activity = get_activity_or_404(activity_id)
+        except ActivityNotFoundError:
             return activity_not_found_error()
 
-        enrollment = Enrollment.objects.filter(
-            activity=activity, participant=participant
-        ).first()
+        try:
+            enrollment, created = create_or_get_enrollment(activity, participant)
+        except CapacityExhaustedError:
+            return capacity_exhausted_error()
 
-        if enrollment is not None:
-            return Response(EnrollmentSerializer(enrollment).data)
-
-        if Enrollment.objects.filter(activity=activity).count() >= activity.capacity:
-            return error(
-                "capacity_exhausted",
-                "No hay lugares disponibles.",
-                status.HTTP_409_CONFLICT,
-            )
-
-        enrollment = Enrollment.objects.create(activity=activity, participant=participant)
         return Response(
             EnrollmentSerializer(enrollment).data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
     @extend_schema(
@@ -254,15 +266,107 @@ class ActivityEnrollmentView(APIView):
         },
     )
     def delete(self, request, activity_id):
-        participant = get_demo_participant(request.headers.get(DEMO_PARTICIPANT_HEADER))
+        participant, auth_error = authenticate_participant(request)
         if participant is None:
-            return authentication_error()
+            return auth_error
 
-        if not Activity.objects.filter(id=activity_id).exists():
+        if not activity_exists(activity_id):
             return activity_not_found_error()
 
-        Enrollment.objects.filter(
-            activity_id=activity_id, participant=participant
-        ).delete()
+        delete_enrollment_if_exists(activity_id, participant)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="listActivitiesV2",
+        summary="Listar actividades (contrato v2)",
+        description=(
+            "Devuelve todas las actividades ordenadas por fecha de inicio. "
+            "La disponibilidad viaja anidada en `availability`."
+        ),
+        tags=["Activities"],
+        responses={
+            200: ActivityV2Serializer(many=True),
+            405: METHOD_NOT_ALLOWED,
+        },
+    )
+)
+class ActivityListViewV2(ActivityListView):
+    serializer_class = ActivityV2Serializer
+
+
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="getActivityV2",
+        summary="Obtener una actividad (contrato v2)",
+        description="Recupera una actividad concreta a partir de su UUID.",
+        tags=["Activities"],
+        parameters=[ACTIVITY_ID_PARAMETER],
+        responses={
+            200: ActivityV2Serializer(),
+            404: ErrorSerializer,
+            405: METHOD_NOT_ALLOWED,
+        },
+    )
+)
+class ActivityDetailViewV2(ActivityDetailView):
+    serializer_class = ActivityV2Serializer
+
+
+@extend_schema_view(
+    get=extend_schema(
+        operation_id="listMyEnrollmentsV2",
+        summary="Listar mis inscripciones (contrato v2)",
+        description=(
+            "Lista las inscripciones del participante indicado por "
+            "X-Participant-ID."
+        ),
+        tags=["Enrollments"],
+        parameters=[PARTICIPANT_HEADER],
+        responses={
+            200: EnrollmentSerializer(many=True),
+            401: ErrorSerializer,
+            405: METHOD_NOT_ALLOWED,
+        },
+    )
+)
+class EnrollmentListViewV2(EnrollmentListView):
+    pass
+
+
+@extend_schema_view(
+    put=extend_schema(
+        operation_id="putMyEnrollmentV2",
+        summary="Inscribirse en una actividad (contrato v2)",
+        description="Crea la inscripción (201) o devuelve la existente (200) si se repite.",
+        tags=["Enrollments"],
+        parameters=[ACTIVITY_ID_PARAMETER, PARTICIPANT_HEADER],
+        request=None,
+        responses={
+            200: EnrollmentSerializer,
+            201: EnrollmentSerializer,
+            401: ErrorSerializer,
+            404: ErrorSerializer,
+            409: ErrorSerializer,
+            405: METHOD_NOT_ALLOWED,
+        },
+    ),
+    delete=extend_schema(
+        operation_id="deleteMyEnrollmentV2",
+        summary="Cancelar mi inscripción (contrato v2)",
+        description="Elimina la inscripción (204). Una repetición también responde 204.",
+        tags=["Enrollments"],
+        parameters=[ACTIVITY_ID_PARAMETER, PARTICIPANT_HEADER],
+        request=None,
+        responses={
+            204: NO_CONTENT,
+            401: ErrorSerializer,
+            404: ErrorSerializer,
+            405: METHOD_NOT_ALLOWED,
+        },
+    ),
+)
+class ActivityEnrollmentViewV2(ActivityEnrollmentView):
+    pass
