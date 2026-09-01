@@ -113,6 +113,16 @@ Los logs de la API se emiten como una línea JSON por evento de negocios, con ca
 {"timestamp": "2026-08-24T13:40:12-03:00", "level": "info", "event": "enrollment_created", "correlation_id": "demo-42", "method": "PUT", "path": "/api/v2/me/enrollments/1b470ddf-3e84-4b77-9aae-091d21e52bd6/", "result": "created", "activity_id": "1b470ddf-3e84-4b77-9aae-091d21e52bd6"}
 ```
 
+Cada evento se emite a consola **y** se persiste de forma plana en
+`backend/logs/trace.log` (un JSON por línea, UTF-8). El archivo rota al llegar a
+1 MB y deja hasta 3 respaldos (`trace.log.1`, `trace.log.2`, `trace.log.3`).
+`backend/logs/` está excluido de Git; borrarlo no afecta a la API porque el
+directorio se recrea al iniciar. Para diagnosticar una interacción:
+
+```bash
+grep '"correlation_id": "demo-42"' backend/logs/trace.log
+```
+
 Eventos mínimos emitidos en cada interacción:
 
 | Evento | Significado | Result posibles |

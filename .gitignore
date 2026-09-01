@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 .venv/
 backend/db.sqlite3
+backend/logs/
 
 # Node / Vite
 frontend/node_modules/

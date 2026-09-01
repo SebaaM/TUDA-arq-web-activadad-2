@@ -3,6 +3,10 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+TRACE_LOG_DIR = BASE_DIR / "logs"
+TRACE_LOG_DIR.mkdir(exist_ok=True)
+TRACE_LOG_FILE = TRACE_LOG_DIR / "trace.log"
+
 SECRET_KEY = "django-insecure-clase-arquitecturas-web"
 DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "backend"]
@@ -72,10 +76,18 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "trace",
         },
+        "trace_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(TRACE_LOG_FILE),
+            "formatter": "trace",
+            "encoding": "utf-8",
+            "maxBytes": 1_000_000,
+            "backupCount": 3,
+        },
     },
     "loggers": {
         "tuda.trace": {
-            "handlers": ["trace_console"],
+            "handlers": ["trace_console", "trace_file"],
             "level": "INFO",
             "propagate": False,
         },

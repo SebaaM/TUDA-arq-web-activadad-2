@@ -2,6 +2,7 @@ import json
 import uuid
 from datetime import datetime
 
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -210,6 +211,56 @@ class CorrelationEnrollmentFlowTests(TestCase):
         self.assertEqual(
             events["participant_auth_checked"]["correlation_id"], "sin-id"
         )
+
+
+class LogPersistenceContractTests(TestCase):
+    def test_events_are_persisted_to_flat_file(self):
+        correlation = "archivo-plano"
+
+        self.client.get(
+            reverse("activities:api-activity-list"),
+            HTTP_X_CORRELATION_ID=correlation,
+        )
+
+        path = settings.TRACE_LOG_FILE
+        self.assertTrue(path.exists())
+        lines = path.read_text(encoding="utf-8").splitlines()
+
+        relevant = []
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if record.get("correlation_id") == correlation:
+                relevant.append(record)
+
+        self.assertTrue(relevant)
+        self.assertEqual(
+            {record["event"] for record in relevant},
+            {"request_received", "request_completed"},
+        )
+        for record in relevant:
+            self.assertEqual(record["method"], "GET")
+            self.assertEqual(record["path"], "/api/v1/activities/")
+
+    def test_flat_file_never_logs_sensitive_headers(self):
+        correlation = "archivo-limpio"
+
+        self.client.get(
+            reverse("activities:api-activity-list"),
+            HTTP_X_CORRELATION_ID=correlation,
+            HTTP_AUTHORIZATION="Bearer token-secreto",
+            HTTP_COOKIE="sessionid=secreto",
+        )
+
+        lines = settings.TRACE_LOG_FILE.read_text(encoding="utf-8").splitlines()
+        relevant = [l for l in lines if correlation in l]
+        self.assertTrue(relevant)
+        self.assertNotIn("token-secreto", "\n".join(relevant))
+        self.assertNotIn("sessionid", "\n".join(relevant))
 
 
 class CorrelationV2ContractTests(TestCase):
