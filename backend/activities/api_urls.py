@@ -2,10 +2,8 @@ from django.urls import path
 
 from .views import (
     ActivityDetailView,
+    ActivityEnrollmentView,
     ActivityListView,
-    EnrollmentCancelView,
-    EnrollmentConfirmView,
-    EnrollmentDetailView,
     EnrollmentListView,
     ParticipantDetailView,
     ParticipantListView,
@@ -35,18 +33,8 @@ urlpatterns = [
         name="api-enrollment-list",
     ),
     path(
-        "api/v1/me/enrollments/<uuid:activity_id>/cancel/",
-        EnrollmentCancelView.as_view(),
-        name="api-enrollment-cancel",
-    ),
-    path(
         "api/v1/me/enrollments/<uuid:activity_id>/",
-        EnrollmentConfirmView.as_view(),
+        ActivityEnrollmentView.as_view(),
         name="api-enrollment-confirm",
-    ),
-    path(
-        "api/v1/me/enrollments/<int:id>/",
-        EnrollmentDetailView.as_view(),
-        name="api-enrollment-detail",
     ),
 ]

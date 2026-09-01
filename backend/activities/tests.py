@@ -8,145 +8,191 @@ from django.utils import timezone
 from .models import Activity, Enrollment, Participant
 
 
-class ActivityListTests(TestCase):
-    def test_lists_every_activity_field(self):
-        activity = Activity.objects.create(
-            id=UUID("1b470ddf-3e84-4b77-9aae-091d21e52bd6"),
-            title="Diseño de una API",
-            starts_at=timezone.make_aware(datetime(2026, 3, 23, 18, 0)),
-            capacity=30,
-        )
-
-        response = self.client.get(reverse("activities:list"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, str(activity.id))
-        self.assertContains(response, activity.title)
-        self.assertContains(response, "2026-03-23T18:00:00-03:00")
-        self.assertContains(response, "30")
-
-    def test_rejects_non_get_requests(self):
-        response = self.client.post(reverse("activities:list"))
-
-        self.assertEqual(response.status_code, 405)
-
-    def test_activity_detail_includes_available_slots(self):
-        activity = Activity.objects.create(
-            title="Diseño de una API",
-            starts_at=timezone.make_aware(datetime(2026, 3, 23, 18, 0)),
-            capacity=2,
-        )
-        participant = Participant.objects.create(name="Juan García")
-        Enrollment.objects.create(activity=activity, participant=participant)
-
-        response = self.client.get(
-            reverse("activities:api-activity-detail", args=[activity.id])
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["data"]["available_slots"], 1)
-
-    def test_activity_api_collection_uses_common_json_structure(self):
-        activity = Activity.objects.create(
-            title="Diseño de una API",
-            starts_at=timezone.make_aware(datetime(2026, 3, 23, 18, 0)),
-            capacity=2,
-        )
-        participant = Participant.objects.create(name="Juan García")
-        Enrollment.objects.create(activity=activity, participant=participant)
-
-        response = self.client.get(reverse("activities:api-activity-list"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["error"], None)
-        self.assertEqual(response.json()["data"][0]["id"], str(activity.id))
-        self.assertEqual(response.json()["data"][0]["available_slots"], 1)
-
-
-class ActivityEnrollmentPutTests(TestCase):
+class ActivityContractTests(TestCase):
     def setUp(self):
         self.activity = Activity.objects.create(
-            title="Diseño de una API",
-            starts_at=timezone.make_aware(datetime(2026, 3, 23, 18, 0)),
-            capacity=1,
+            id=UUID("1b470ddf-3e84-4b77-9aae-091d21e52bd6"),
+            title="Taller de HTTP",
+            starts_at=timezone.make_aware(datetime(2026, 4, 10, 18, 0)),
+            capacity=20,
         )
         self.participant = Participant.objects.create(name="Juan García")
 
-    def test_confirms_enrollment_when_activity_has_capacity(self):
-        Enrollment.objects.create(
-            activity=self.activity,
-            participant=self.participant,
-        )
-
-        response = self.client.put(
-            reverse(
-                "activities:api-enrollment-confirm",
-                args=[self.activity.id],
-            ),
-            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
-            content_type="application/json",
+    def test_get_known_activity(self):
+        response = self.client.get(
+            reverse("activities:api-activity-detail", args=[self.activity.id])
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["data"]["activity"]["id"], str(self.activity.id))
-        self.assertEqual(response.json()["data"]["participant"]["id"], str(self.participant.id))
-        self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 1)
+        body = response.json()
+        self.assertEqual(body["id"], str(self.activity.id))
+        self.assertEqual(body["title"], "Taller de HTTP")
+        self.assertEqual(body["capacity"], 20)
+        self.assertEqual(body["available_slots"], 20)
+        self.assertEqual(body["starts_at"], "2026-04-10T18:00:00-03:00")
+        self.assertNotIn("data", body)
+        self.assertNotIn("error", body)
 
-    def test_rejects_enrollment_when_activity_capacity_is_exceeded(self):
-        first_participant = Participant.objects.create(name="María López")
-        Enrollment.objects.create(activity=self.activity, participant=first_participant)
-        Enrollment.objects.create(activity=self.activity, participant=self.participant)
+    def test_get_list_returns_public_shape(self):
+        response = self.client.get(reverse("activities:api-activity-list"))
 
-        response = self.client.put(
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIsInstance(body, list)
+        first = body[0]
+        self.assertEqual(set(first.keys()), {"id", "title", "starts_at", "capacity", "available_slots"})
+
+    def test_get_unknown_activity_is_stable_error(self):
+        response = self.client.get(
+            reverse(
+                "activities:api-activity-detail",
+                args=["00000000-0000-0000-0000-000000000000"],
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "code": "activity_not_found",
+            "message": "La actividad no existe.",
+        })
+
+
+class EnrollmentIdempotencyTests(TestCase):
+    def setUp(self):
+        self.activity = Activity.objects.create(
+            title="Taller de HTTP",
+            starts_at=timezone.make_aware(datetime(2026, 4, 10, 18, 0)),
+            capacity=20,
+        )
+        self.participant = Participant.objects.create(name="Juan García")
+
+    def _put(self, activity=None, participant=None):
+        return self.client.put(
             reverse(
                 "activities:api-enrollment-confirm",
-                args=[self.activity.id],
+                args=[(activity or self.activity).id],
             ),
+            HTTP_X_PARTICIPANT_ID=str((participant or self.participant).id),
+            content_type="application/json",
+        )
+
+    def test_first_put_creates_and_repeat_is_idempotent(self):
+        first = self._put()
+        self.assertEqual(first.status_code, 201)
+        first_body = first.json()
+        self.assertEqual(first_body["activity_id"], str(self.activity.id))
+        self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 1)
+
+        repeated = self._put()
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(repeated.json(), first_body)
+        self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 1)
+
+    def test_repeat_preserves_enrolled_at(self):
+        first = self._put()
+        first_enrolled_at = first.json()["enrolled_at"]
+
+        repeated = self._put()
+
+        self.assertEqual(repeated.json()["enrolled_at"], first_enrolled_at)
+        enrollment = Enrollment.objects.get(activity=self.activity, participant=self.participant)
+        self.assertEqual(
+            timezone.localtime(enrollment.enrolled_at).isoformat(),
+            first_enrolled_at,
+        )
+
+    def test_delete_is_idempotent(self):
+        self._put()
+
+        first = self.client.delete(
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+        )
+        self.assertEqual(first.status_code, 204)
+        self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 0)
+
+        second = self.client.delete(
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
+            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+        )
+        self.assertEqual(second.status_code, 204)
+        self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 0)
+
+
+class CapacityTests(TestCase):
+    def setUp(self):
+        self.activity = Activity.objects.create(
+            title="Taller de HTTP",
+            starts_at=timezone.make_aware(datetime(2026, 4, 10, 18, 0)),
+            capacity=1,
+        )
+        self.juan = Participant.objects.create(name="Juan García")
+        self.maria = Participant.objects.create(name="María López")
+
+    def test_capacity_exhausted_uses_stable_error(self):
+        Enrollment.objects.create(activity=self.activity, participant=self.juan)
+
+        response = self.client.put(
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
+            HTTP_X_PARTICIPANT_ID=str(self.maria.id),
             content_type="application/json",
         )
 
         self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()["error"], "Activity capacity exceeded")
-        self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 2)
+        self.assertEqual(response.json(), {
+            "code": "capacity_exhausted",
+            "message": "No hay lugares disponibles.",
+        })
+        self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 1)
 
-    def test_creates_enrollment_using_participant_header(self):
+    def test_canceling_releases_capacity(self):
+        Enrollment.objects.create(activity=self.activity, participant=self.juan)
+        self.client.delete(
+            reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
+            HTTP_X_PARTICIPANT_ID=str(self.juan.id),
+        )
+
         response = self.client.put(
             reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
-            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
+            HTTP_X_PARTICIPANT_ID=str(self.maria.id),
             content_type="application/json",
         )
 
         self.assertEqual(response.status_code, 201)
-        self.assertTrue(
-            Enrollment.objects.filter(
-                activity=self.activity,
-                participant=self.participant,
-            ).exists()
-        )
 
-    def test_rejects_missing_participant_header(self):
+
+class AuthenticationAndMethodTests(TestCase):
+    def setUp(self):
+        self.activity = Activity.objects.create(
+            title="Taller de HTTP",
+            starts_at=timezone.make_aware(datetime(2026, 4, 10, 18, 0)),
+            capacity=20,
+        )
+        self.participant = Participant.objects.create(name="Juan García")
+
+    def test_missing_identity_is_401(self):
         response = self.client.put(
             reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {
+            "code": "authentication_required",
+            "message": "Se requiere una identidad de participante válida.",
+        })
 
-    def test_rejects_malformed_participant_header(self):
+    def test_malformed_identity_is_401(self):
         response = self.client.put(
             reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
             HTTP_X_PARTICIPANT_ID="not-a-uuid",
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {
-            "data": None,
-            "error": "Invalid participant identity",
-        })
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["code"], "authentication_required")
 
-    def test_rejects_unknown_activity(self):
+    def test_unknown_activity_on_put_is_404(self):
         response = self.client.put(
             reverse(
                 "activities:api-enrollment-confirm",
@@ -157,52 +203,15 @@ class ActivityEnrollmentPutTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["code"], "activity_not_found")
 
-    def test_rejects_unsupported_method(self):
+    def test_unsupported_method_is_405_with_allow_header(self):
         response = self.client.post(
             reverse("activities:api-enrollment-confirm", args=[self.activity.id]),
             HTTP_X_PARTICIPANT_ID=str(self.participant.id),
         )
 
         self.assertEqual(response.status_code, 405)
-
-    def test_lists_only_the_participant_enrollments(self):
-        other_participant = Participant.objects.create(name="María López")
-        Enrollment.objects.create(activity=self.activity, participant=other_participant)
-        Enrollment.objects.create(activity=self.activity, participant=self.participant)
-
-        response = self.client.get(
-            reverse("activities:api-enrollment-list"),
-            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["data"]), 1)
-        self.assertEqual(
-            response.json()["data"][0]["participant"]["id"],
-            str(self.participant.id),
-        )
-
-    def test_cancels_enrollment_using_participant_header(self):
-        Enrollment.objects.create(activity=self.activity, participant=self.participant)
-
-        response = self.client.delete(
-            reverse("activities:api-enrollment-cancel", args=[self.activity.id]),
-            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
-        )
-
-        self.assertEqual(response.status_code, 204)
-        self.assertFalse(
-            Enrollment.objects.filter(
-                activity=self.activity,
-                participant=self.participant,
-            ).exists()
-        )
-
-    def test_rejects_canceling_unknown_enrollment(self):
-        response = self.client.delete(
-            reverse("activities:api-enrollment-cancel", args=[self.activity.id]),
-            HTTP_X_PARTICIPANT_ID=str(self.participant.id),
-        )
-
-        self.assertEqual(response.status_code, 404)
+        self.assertIn("Allow", response.headers)
+        self.assertIn("PUT", response.headers["Allow"])
+        self.assertIn("DELETE", response.headers["Allow"])

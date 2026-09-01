@@ -38,11 +38,51 @@ Con el servidor iniciado, abrir:
 | `GET` | `/api/v1/participants/` | `200`, participantes |
 | `GET` | `/api/v1/participants/{participant_id}/` | `200`, participante |
 | `GET` | `/api/v1/me/enrollments/` | `200`, inscripciones propias |
-| `GET` | `/api/v1/me/enrollments/{id}/` | `200`, inscripción por ID numérico |
-| `PUT` | `/api/v1/me/enrollments/{activity_id}/` | `201` al crear o `200` si ya existía |
-| `DELETE` | `/api/v1/me/enrollments/{activity_id}/cancel/` | `204`, sin body |
+| `PUT` | `/api/v1/me/enrollments/{activity_id}/` | `201` al crear o `200` si ya existía (idempotente) |
+| `DELETE` | `/api/v1/me/enrollments/{activity_id}/` | `204`, sin body (idempotente) |
 
-Las operaciones bajo `/me` (salvo el detalle por ID) requieren `X-Participant-ID`. Una identidad ausente o desconocida produce `400`; una actividad, participante o inscripción inexistente, `404`; y una actividad sin cupos, `409`. Los métodos no habilitados producen `405`.
+Las operaciones bajo `/me` requieren `X-Participant-ID`. Una identidad ausente o desconocida produce `401`; una actividad o participante inexistente, `404`; y una actividad sin cupos, `409`. Los métodos no habilitados producen `405` con encabezado `Allow`.
+
+### Formato de representación pública
+
+Una actividad (tanto en la colección como en el detalle):
+
+```json
+{
+  "id": "uuid",
+  "title": "Taller de HTTP",
+  "starts_at": "2026-04-10T18:00:00-03:00",
+  "capacity": 20,
+  "available_slots": 3
+}
+```
+
+Una inscripción:
+
+```json
+{
+  "activity_id": "uuid",
+  "enrolled_at": "2026-04-03T15:20:00-03:00"
+}
+```
+
+### Formato de error estable
+
+Todos los errores usan una forma estable con `code` y `message`:
+
+```json
+{
+  "code": "capacity_exhausted",
+  "message": "No hay lugares disponibles."
+}
+```
+
+Códigos disponibles: `capacity_exhausted`, `activity_not_found`, `authentication_required`.
+
+### Idempotencia
+
+- Un mismo `PUT` repetido devuelve `200` con la inscripción ya existente (se conserva `enrolled_at`, no se crea otra fila) en lugar de `409`.
+- Un mismo `DELETE` repetido devuelve `204` igualmente; el efecto final es "sin inscripción".
 
 ## Comandos útiles
 
