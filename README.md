@@ -107,6 +107,54 @@ pnpm astro check
 pnpm build
 ```
 
+## API versionada (v1/v2)
+
+El backend expone dos versiones del contrato HTTP que conviven bajo el mismo
+proyecto. La rama `versionado` introdujo la v2 sin tocar la v1.
+
+Reglas del versionado:
+
+- `v1` queda **exactamente** como estaba: `capacity` y `available_slots` viajan
+  en el nivel raíz de `Activity`.
+- `v2` agrupa esos campos en `availability`:
+  `{ "id": "...", "title": "...", "starts_at": "...", "availability": { "capacity": 20, "available_slots": 3 } }`.
+- `Enrollment`, los errores (`code` + `message`) y la idempotencia son
+  idénticos entre versiones.
+- La lógica de dominio y la persistencia son compartidas: las v2 extienden las
+  vistas v1 (`ActivityListViewV2(ActivityListView)`, ...) y solo cambian el
+  serializador público (`serializer_class`) y los metadatos de OpenAPI.
+
+Endpoints disponibles:
+
+| Método   | Endpoint                            | Versión |
+| -------- | ----------------------------------- | ------- |
+| `GET`    | `/api/v1/activities/`               | v1      |
+| `GET`    | `/api/v1/activities/{activity_id}/` | v1      |
+| `GET`    | `/api/v1/me/enrollments/`           | v1      |
+| `PUT`    | `/api/v1/me/enrollments/{id}/`      | v1      |
+| `DELETE` | `/api/v1/me/enrollments/{id}/`      | v1      |
+| `GET`    | `/api/v2/activities/`               | v2      |
+| `GET`    | `/api/v2/activities/{activity_id}/` | v2      |
+| `GET`    | `/api/v2/me/enrollments/`           | v2      |
+| `PUT`    | `/api/v2/me/enrollments/{id}/`      | v2      |
+| `DELETE` | `/api/v2/me/enrollments/{id}/`      | v2      |
+
+La documentación OpenAPI también se genera por versión:
+
+- `http://127.0.0.1:8000/api/v1/openapi.json` — solo el contrato v1.
+- `http://127.0.0.1:8000/api/v2/openapi.json` — solo el contrato v2.
+- `http://127.0.0.1:8000/api/openapi.json` — esquema combinado (v1 + v2).
+- `http://127.0.0.1:8000/api/docs` — Swagger UI del esquema combinado.
+
+La suite de tests cubre la regresión de v1, la coexistencia de ambas versiones
+(idempotencia del `PUT`/`DELETE`, errores consistentes) y la diferencia
+estructural de `Activity` en cada OpenAPI:
+
+```bash
+cd backend
+python manage.py test
+```
+
 ## Punto de partida didáctico
 
 El proyecto conserva la vista HTML clásica y las implementaciones cliente como
