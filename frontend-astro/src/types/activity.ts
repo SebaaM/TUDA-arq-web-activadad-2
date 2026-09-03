@@ -16,12 +16,8 @@ export interface Participant {
   name: string;
 }
 
-/** La actividad dentro de una inscripción no incluye available_slots. */
-export type EnrollmentActivity = Omit<Activity, "available_slots">;
-
 export interface Enrollment {
-  participant: Participant;
-  activity: EnrollmentActivity;
+  activity_id: string;
   enrolled_at: string;
 }
 

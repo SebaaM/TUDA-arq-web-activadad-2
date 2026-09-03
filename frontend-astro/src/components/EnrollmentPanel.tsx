@@ -93,7 +93,7 @@ export default function EnrollmentPanel({ activityId }: Props) {
 				return;
 			}
 
-			const mine = result.data.find((item) => item.activity.id === activityId);
+			const mine = result.data.find((item) => item.activity_id === activityId);
 			setEnrollment(mine ?? null);
 			setPhase(mine ? "enrolled" : "not-enrolled");
 			setBusy(null);
@@ -272,10 +272,10 @@ export default function EnrollmentPanel({ activityId }: Props) {
 							<dl>
 								<dt>Inscripto el</dt>
 								<dd>{formatDateTime(enrollment.enrolled_at)}</dd>
-								<dt>Participante</dt>
-								<dd>{enrollment.participant.name}</dd>
-								<dt>Actividad</dt>
-								<dd>{enrollment.activity.title}</dd>
+								<dt>ID de actividad</dt>
+								<dd>
+									<code>{enrollment.activity_id}</code>
+								</dd>
 							</dl>
 						</div>
 					)}
