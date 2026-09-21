@@ -1,4 +1,5 @@
 .DS_Store
+.env
 
 # Python / Django
 __pycache__/
