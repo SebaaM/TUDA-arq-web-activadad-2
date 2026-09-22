@@ -384,12 +384,18 @@ export function ActivitiesPage() {
   }
 
   return (
-    <main className="min-h-svh bg-linear-to-b from-slate-50 to-white">
+    <main className="min-h-svh bg-background">
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
+        <nav className="mb-12 flex items-center justify-between border-b border-border/70 pb-4">
+          <span className="text-sm font-semibold tracking-wide text-foreground">
+            TUDA <span className="text-primary">/ ACTIVIDADES</span>
+          </span>
+          <Badge variant="outline">API v2</Badge>
+        </nav>
         <header className="mb-8 flex flex-col gap-5 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl space-y-2">
-            <p className="text-sm font-medium text-primary">
-              Gestión de actividades
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-primary">
+              Agenda abierta
             </p>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               Próximas actividades
