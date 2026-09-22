@@ -116,8 +116,8 @@ Reglas del versionado:
 
 - `v1` queda **exactamente** como estaba: `capacity` y `available_slots` viajan
   en el nivel raíz de `Activity`.
-- `v2` agrupa esos campos en `availability`:
-  `{ "id": "...", "title": "...", "starts_at": "...", "availability": { "capacity": 20, "available_slots": 3 } }`.
+- `v2` agrega `category` y agrupa el cupo en `availability`:
+  `{ "id": "...", "title": "...", "category": "General", "starts_at": "...", "availability": { "capacity": 20, "available_slots": 3 } }`.
 - `Enrollment`, los errores (`code` + `message`) y la idempotencia son
   idénticos entre versiones.
 - La lógica de dominio y la persistencia son compartidas: las v2 extienden las
@@ -134,6 +134,7 @@ Endpoints disponibles:
 | `PUT`    | `/api/v1/me/enrollments/{id}/`      | v1      |
 | `DELETE` | `/api/v1/me/enrollments/{id}/`      | v1      |
 | `GET`    | `/api/v2/activities/`               | v2      |
+| `POST`   | `/api/v2/activities/`               | v2      |
 | `GET`    | `/api/v2/activities/{activity_id}/` | v2      |
 | `GET`    | `/api/v2/me/enrollments/`           | v2      |
 | `PUT`    | `/api/v2/me/enrollments/{id}/`      | v2      |
@@ -164,6 +165,12 @@ muestra la diferencia entre HTML generado en build e interactividad hidratada
 por Astro. Para observar la arquitectura híbrida, desactivar JavaScript deja
 visible el contenido estático de actividades, mientras la isla de inscripción
 queda en su estado inicial.
+
+## Instrucciones para agentes
+
+`AGENTS.md` contiene las decisiones persistentes del repositorio: stack, pnpm, estructura, aliases, Definition of Done y el uso obligatorio de shadcn/ui. La skill `.agents/skills/ui-design/SKILL.md` encapsula el procedimiento especializado para tareas visuales: comprobar la instalación, reutilizar primitives, incorporar solo los necesarios y validar accesibilidad y responsive.
+
+Esta separación mantiene las reglas generales visibles para cualquier tarea y carga el conocimiento de diseño solo cuando la tarea involucra interfaz.
 
 ## Trazabilidad de interacciones
 
