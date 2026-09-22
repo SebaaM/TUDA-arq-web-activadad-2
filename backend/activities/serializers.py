@@ -48,7 +48,7 @@ class ActivityV2Serializer(serializers.ModelSerializer):
 
     class Meta:
         model = Activity
-        fields = ("id", "title", "starts_at", "availability")
+        fields = ("id", "title", "category", "starts_at", "availability")
 
     @extend_schema_field(AvailabilityV2Serializer)
     def get_availability(self, activity) -> dict:
@@ -61,6 +61,15 @@ class ActivityV2Serializer(serializers.ModelSerializer):
                 "available_slots": activity.capacity - enrolled_count,
             }
         ).data
+
+
+class ActivityCreateV2Serializer(serializers.ModelSerializer):
+    starts_at = LocalDateTimeField()
+    category = serializers.CharField(max_length=80)
+
+    class Meta:
+        model = Activity
+        fields = ("title", "category", "starts_at", "capacity")
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):

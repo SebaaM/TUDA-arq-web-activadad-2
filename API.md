@@ -315,3 +315,49 @@ Errores `400 Bad Request` y `404 Not Found`:
 | `404` | Actividad, participante o inscripción inexistente |
 | `405` | Método HTTP no permitido |
 | `409` | Capacidad de la actividad agotada |
+
+## API v2
+
+La interfaz React consume la API mediante el proxy de Vite en `/api`. En desarrollo, el destino es `http://127.0.0.1:8000` o el valor de `VITE_PROXY_TARGET`.
+
+### Actividades v2
+
+| Método | Endpoint | Resultado correcto |
+| --- | --- | --- |
+| `GET` | `/api/v2/activities/` | Lista actividades ordenadas por fecha. |
+| `POST` | `/api/v2/activities/` | Crea una actividad y devuelve `201 Created`. |
+| `GET` | `/api/v2/activities/{activity_id}/` | Obtiene el detalle de una actividad. |
+
+La representación v2 agrega `category` y agrupa el cupo en `availability`:
+
+```json
+{
+  "id": "uuid",
+  "title": "Laboratorio de React",
+  "category": "Frontend",
+  "starts_at": "2026-05-12T18:30:00-03:00",
+  "availability": {
+    "capacity": 18,
+    "available_slots": 18
+  }
+}
+```
+
+Para crear una actividad, enviar `title`, `category`, `starts_at` en formato ISO 8601 y `capacity` como entero positivo:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v2/activities/ \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Laboratorio de React","category":"Frontend","starts_at":"2026-05-12T18:30:00-03:00","capacity":18}'
+```
+
+Los datos inválidos responden `400` con:
+
+```json
+{
+  "code": "activity_validation_error",
+  "message": "Los datos de la actividad no son válidos."
+}
+```
+
+Los endpoints de inscripciones v2 se mantienen bajo `/api/v2/me/enrollments/` y requieren `X-Participant-ID`.

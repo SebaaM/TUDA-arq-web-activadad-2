@@ -1,6 +1,6 @@
 # Backend Django y API OpenAPI
 
-Aplicación Django con persistencia SQLite. La ruta `/` conserva la vista HTML clásica y `/api/v1` expone la API documentada con Django REST Framework y drf-spectacular.
+Aplicación Django con persistencia SQLite. La ruta `/` conserva la vista HTML clásica; `/api/v1` mantiene el contrato original y `/api/v2` expone el contrato usado por el frontend React.
 
 ## Requisitos
 
@@ -42,6 +42,28 @@ Con el servidor iniciado, abrir:
 | `DELETE` | `/api/v1/me/enrollments/{activity_id}/` | `204`, sin body (idempotente) |
 
 Las operaciones bajo `/me` requieren `X-Participant-ID`. Una identidad ausente o desconocida produce `401`; una actividad o participante inexistente, `404`; y una actividad sin cupos, `409`. Los métodos no habilitados producen `405` con encabezado `Allow`.
+
+### Actividades v2
+
+| Método | Ruta | Éxito |
+| --- | --- | --- |
+| `GET` | `/api/v2/activities/` | `200`, actividades con disponibilidad anidada |
+| `POST` | `/api/v2/activities/` | `201`, crea una actividad con título, categoría, fecha y cupo |
+| `GET` | `/api/v2/activities/{activity_id}/` | `200`, actividad v2 |
+
+La representación v2 agrega `category` y conserva el cupo dentro de `availability`:
+
+```json
+{
+  "id": "uuid",
+  "title": "Laboratorio de React",
+  "category": "Frontend",
+  "starts_at": "2026-05-12T18:30:00-03:00",
+  "availability": { "capacity": 18, "available_slots": 18 }
+}
+```
+
+`POST /api/v2/activities/` requiere `title`, `category`, `starts_at` ISO 8601 y `capacity` entero positivo. Un payload inválido responde `400` con el código `activity_validation_error`.
 
 ### Formato de representación pública
 

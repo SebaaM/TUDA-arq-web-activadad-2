@@ -6,6 +6,7 @@ from django.db import models
 class Activity(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=160)
+    category = models.CharField(max_length=80, default="General")
     starts_at = models.DateTimeField()
     capacity = models.PositiveIntegerField()
 

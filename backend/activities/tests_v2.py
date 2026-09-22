@@ -17,6 +17,7 @@ class V2ActivityContractTests(TestCase):
         self.activity = Activity.objects.create(
             id=UUID("1b470ddf-3e84-4b77-9aae-091d21e52bd6"),
             title="Taller de HTTP",
+            category="Tecnología",
             starts_at=timezone.make_aware(datetime(2026, 4, 10, 18, 0)),
             capacity=20,
         )
@@ -26,11 +27,15 @@ class V2ActivityContractTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(set(body.keys()), {"id", "title", "starts_at", "availability"})
+        self.assertEqual(
+            set(body.keys()),
+            {"id", "title", "category", "starts_at", "availability"},
+        )
         self.assertNotIn("capacity", body)
         self.assertNotIn("available_slots", body)
         self.assertEqual(body["id"], str(self.activity.id))
         self.assertEqual(body["title"], "Taller de HTTP")
+        self.assertEqual(body["category"], "Tecnología")
         self.assertEqual(body["starts_at"], "2026-04-10T18:00:00-03:00")
         self.assertEqual(body["availability"], {"capacity": 20, "available_slots": 20})
 
@@ -41,7 +46,10 @@ class V2ActivityContractTests(TestCase):
         body = response.json()
         self.assertIsInstance(body, list)
         first = body[0]
-        self.assertEqual(set(first.keys()), {"id", "title", "starts_at", "availability"})
+        self.assertEqual(
+            set(first.keys()),
+            {"id", "title", "category", "starts_at", "availability"},
+        )
         self.assertEqual(
             set(first["availability"].keys()), {"capacity", "available_slots"}
         )
@@ -105,6 +113,43 @@ class V2EnrollmentIdempotencyTests(TestCase):
         )
         self.assertEqual(second.status_code, 204)
         self.assertEqual(Enrollment.objects.filter(activity=self.activity).count(), 0)
+
+
+class V2ActivityCreationTests(TestCase):
+    def test_post_creates_a_v2_activity(self):
+        response = self.client.post(
+            v2_url("api-activity-list-v2"),
+            {
+                "title": "Laboratorio de React",
+                "category": "Frontend",
+                "starts_at": "2026-05-12T18:30:00-03:00",
+                "capacity": 18,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body["title"], "Laboratorio de React")
+        self.assertEqual(body["category"], "Frontend")
+        self.assertEqual(body["availability"], {"capacity": 18, "available_slots": 18})
+        self.assertTrue(Activity.objects.filter(id=body["id"]).exists())
+
+    def test_post_rejects_invalid_payload(self):
+        response = self.client.post(
+            v2_url("api-activity-list-v2"),
+            {"title": "", "category": "", "capacity": 0},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "activity_validation_error",
+                "message": "Los datos de la actividad no son válidos.",
+            },
+        )
 
 
 class V2ErrorConsistencyTests(TestCase):
@@ -193,7 +238,11 @@ class CoexistenceTests(TestCase):
         self.assertIn("capacity", v1)
         self.assertIn("available_slots", v1)
         self.assertEqual(set(v1.keys()), {"id", "title", "starts_at", "capacity", "available_slots"})
-        self.assertEqual(set(v2.keys()), {"id", "title", "starts_at", "availability"})
+        self.assertEqual(
+            set(v2.keys()),
+            {"id", "title", "category", "starts_at", "availability"},
+        )
+        self.assertEqual(v2["category"], "General")
         self.assertEqual(
             v2["availability"],
             {"capacity": v1["capacity"], "available_slots": v1["available_slots"]},
@@ -270,6 +319,7 @@ class OpenAPIContractTests(TestCase):
 
         activity = schema["components"]["schemas"]["ActivityV2"]
         self.assertIn("availability", activity["properties"])
+        self.assertIn("category", activity["properties"])
         self.assertNotIn("capacity", activity["properties"])
         self.assertNotIn("available_slots", activity["properties"])
 
@@ -290,6 +340,7 @@ class OpenAPIContractTests(TestCase):
         self.assertNotIn("availability", v1_activity["properties"])
         self.assertNotIn("capacity", v2_activity["properties"])
         self.assertIn("availability", v2_activity["properties"])
+        self.assertIn("category", v2_activity["properties"])
 
     def test_combined_schema_contains_both_versions(self):
         schema = self.client.get("/api/openapi.json").json()

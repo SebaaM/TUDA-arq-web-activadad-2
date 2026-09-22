@@ -11,18 +11,21 @@ ACTIVITIES = [
     {
         "id": UUID("1b470ddf-3e84-4b77-9aae-091d21e52bd6"),
         "title": "Introducción a APIs web",
+        "category": "Tecnología",
         "starts_at": timezone.make_aware(datetime(2026, 3, 23, 18, 0)),
         "capacity": 30,
     },
     {
         "id": UUID("6ccaf64f-d37e-4e6c-ae03-f3d6547bb297"),
         "title": "Contratos HTTP observables",
+        "category": "Tecnología",
         "starts_at": timezone.make_aware(datetime(2026, 3, 25, 18, 0)),
         "capacity": 24,
     },
     {
         "id": UUID("80c08526-3da1-4f0a-845c-740fa33f1f50"),
         "title": "Taller de integración",
+        "category": "Taller",
         "starts_at": timezone.make_aware(datetime(2026, 3, 27, 17, 0)),
         "capacity": 20,
     },

@@ -13,6 +13,7 @@ from .models import Activity, Enrollment, Participant
 from .serializers import (
     ActivitySerializer,
     ActivitySerializerV1,
+    ActivityCreateV2Serializer,
     ActivityV2Serializer,
     EnrollmentSerializer,
     ErrorSerializer,
@@ -85,6 +86,14 @@ def capacity_exhausted_error() -> Response:
         "capacity_exhausted",
         "No hay lugares disponibles.",
         status.HTTP_409_CONFLICT,
+    )
+
+
+def activity_validation_error() -> Response:
+    return error(
+        "activity_validation_error",
+        "Los datos de la actividad no son válidos.",
+        status.HTTP_400_BAD_REQUEST,
     )
 
 
@@ -295,10 +304,33 @@ class ActivityEnrollmentView(APIView):
             200: ActivityV2Serializer(many=True),
             405: METHOD_NOT_ALLOWED,
         },
-    )
+    ),
+    post=extend_schema(
+        operation_id="createActivityV2",
+        summary="Crear una actividad (contrato v2)",
+        description="Crea una actividad con nombre, categoría, fecha y capacidad.",
+        tags=["Activities"],
+        request=ActivityCreateV2Serializer,
+        responses={
+            201: ActivityV2Serializer,
+            400: ErrorSerializer,
+            405: METHOD_NOT_ALLOWED,
+        },
+    ),
 )
 class ActivityListViewV2(ActivityListView):
     serializer_class = ActivityV2Serializer
+
+    def post(self, request):
+        serializer = ActivityCreateV2Serializer(data=request.data)
+        if not serializer.is_valid():
+            return activity_validation_error()
+
+        activity = serializer.save()
+        return Response(
+            ActivityV2Serializer(activity).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 @extend_schema_view(
