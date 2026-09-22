@@ -11,6 +11,7 @@ backend/logs/
 # Node / Vite
 frontend/node_modules/
 frontend/dist/
+.pnpm-store/
 frontend-astro/node_modules/
 frontend-astro/dist/
 frontend-astro/.astro/
