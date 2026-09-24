@@ -3,3 +3,11 @@ db.sqlite3
 __pycache__
 *.py[cod]
 .DS_Store
+.git
+.dockerignore
+Dockerfile
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
