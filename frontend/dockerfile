@@ -4,8 +4,9 @@ RUN corepack enable pnpm
 
 WORKDIR /app
 
-# El código de la app no se copia: se monta en runtime con -v sobre /app.
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 EXPOSE 5173
 
-CMD ["pnpm", "dev"]
+CMD ["pnpm", "dev", "--host", "0.0.0.0"]

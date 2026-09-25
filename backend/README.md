@@ -1,6 +1,6 @@
 # Backend Django y API OpenAPI
 
-Aplicación Django con persistencia SQLite. La ruta `/` conserva la vista HTML clásica; `/api/v1` mantiene el contrato original y `/api/v2` expone el contrato usado por el frontend React.
+Aplicación Django con persistencia PostgreSQL configurada por variables de entorno. La ruta `/` conserva la vista HTML clásica; `/api/v1` mantiene el contrato original y `/api/v2` expone el contrato usado por el frontend React.
 
 ## Requisitos
 
@@ -9,6 +9,14 @@ Aplicación Django con persistencia SQLite. La ruta `/` conserva la vista HTML c
 ## Iniciar el proyecto
 
 ```bash
+export DJANGO_SECRET_KEY=dev-only-secret
+export DJANGO_DEBUG=true
+export DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+export POSTGRES_DB=actvidades
+export POSTGRES_USER=untdf
+export POSTGRES_PASSWORD=untdf
+export POSTGRES_HOST=127.0.0.1
+export POSTGRES_PORT=5432
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
@@ -198,4 +206,4 @@ python manage.py seed_activities
 - `correlation/context.py`: contexto de trazabilidad (ContextVar) accesible sin pasar el ID en cada función.
 - `correlation/log.py`: logger estructurado `tuda.trace` con schema estable y `log_event()`.
 
-SQLite usa el archivo `db.sqlite3`, creado por `python manage.py migrate` y excluido de Git.
+En Compose, PostgreSQL se ejecuta como el servicio `db` y sus datos se conservan en el volumen nombrado `untdf-pgdata`.

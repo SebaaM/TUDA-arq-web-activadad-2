@@ -79,18 +79,29 @@ pnpm preview
 
 ## Puesta en marcha con Docker Compose
 
-Docker Compose queda preparado para uso futuro; no es necesario para seguir la primera clase.
+El modo de desarrollo usa PostgreSQL, Django con `runserver` y Vite dentro de Compose.
+Copiá el archivo de variables antes del primer arranque:
 
 ```bash
-docker compose up --build
+cp .env.example .env
+docker compose -f compose.dev.yaml up --build -d
+docker compose -f compose.dev.yaml exec api python manage.py seed_activities
+docker compose -f compose.dev.yaml exec api python manage.py seed_participants_and_enrollments
 ```
 
-El backend queda disponible en <http://127.0.0.1:8000/> y el frontend en <http://127.0.0.1:5173/>. El comando del backend aplica las migraciones y carga los datos de muestra antes de iniciar el servidor.
+En PowerShell, el primer comando equivalente es:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Las migraciones se aplican automáticamente al iniciar el backend. El backend queda disponible en <http://127.0.0.1:8000/> y el frontend en <http://127.0.0.1:5173/>.
+Las semillas se ejecutan una sola vez sobre una base nueva porque restauran datos de demostración.
 
 Para detener ambos servicios:
 
 ```bash
-docker compose down
+docker compose -f compose.dev.yaml down
 ```
 
 ## Verificación rápida
