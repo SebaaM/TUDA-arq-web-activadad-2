@@ -1,15 +1,18 @@
 from pathlib import Path
+import environ
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+env = environ.Env(DJANGO_DEBUG=(bool, False))
+environ.Env.read_env(BASE_DIR.parent / ".env")
 
 TRACE_LOG_DIR = BASE_DIR / "logs"
 TRACE_LOG_DIR.mkdir(exist_ok=True)
 TRACE_LOG_FILE = TRACE_LOG_DIR / "trace.log"
 
-SECRET_KEY = "django-insecure-clase-arquitecturas-web"
-DEBUG = True
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "backend"]
+SECRET_KEY = env("DJANGO_SECRET_KEY")
+DEBUG = env("DJANGO_DEBUG")
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -56,8 +59,12 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": env("POSTGRES_DB"),
+        "USER": env("POSTGRES_USER"),
+        "PASSWORD": env("POSTGRES_PASSWORD"),
+        "HOST": env("POSTGRES_HOST"),
+        "PORT": env("POSTGRES_PORT", default="5432"),
     }
 }
 

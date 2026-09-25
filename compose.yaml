@@ -38,7 +38,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     environment:
-      VITE_API_HOST: "${API_HOST}"
+      VITE_PROXY_TARGET: "${VITE_PROXY_TARGET}"
     depends_on:
       - api
     ports:
