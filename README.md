@@ -4,13 +4,25 @@ Base de trabajo para retomar una aplicación Django renderizada en el servidor y
 
 El repositorio comienza con dos aplicaciones independientes:
 
-- `backend/`: Django, el modelo `Activity`, SQLite y una vista HTML clásica.
+- `backend/`: Django, el modelo `Activity`, PostgreSQL y una vista HTML clásica.
 - `frontend/`: Vite + React + TypeScript para la implementación cliente del laboratorio.
-- `frontend-astro/`: Astro con salida estática y una isla React para consultar y modificar inscripciones.
 
 ## Puesta en marcha local
 
 ### 1. Backend
+
+Requiere una instancia de PostgreSQL accesible según las variables de `.env`.
+Desde la raíz del repositorio, crear el archivo de entorno:
+
+```bash
+cp .env.example .env
+```
+
+En PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
 
 ```bash
 cd backend
@@ -19,6 +31,7 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 python manage.py migrate
 python manage.py seed_activities
+python manage.py seed_participants_and_enrollments
 python manage.py runserver
 ```
 
@@ -36,45 +49,43 @@ pnpm dev
 
 Abrir <http://127.0.0.1:5173/>.
 
-### 3. Frontend Astro
+## Dockerfiles y responsabilidades
 
-En otra terminal, con el backend encendido:
+- `backend/Dockerfile`: construye la imagen de Django, instala `requirements.txt`, copia el backend y ejecuta Gunicorn.
+- `backend/docker-entrypoint.sh`: aplica migraciones antes de iniciar el proceso principal. No ejecuta semillas automáticamente.
+- `frontend/dockerfile`: Dockerfile multi-stage con targets `development`, `build` y `production`.
+  - `development` ejecuta Vite con recarga.
+  - `build` genera `dist/` mediante `pnpm build`.
+  - `production` usa Nginx para servir el build.
+- `frontend/nginx.conf`: sirve React, resuelve rutas SPA y reenvía `/api/*` al servicio Django.
 
-```bash
-cd frontend-astro
-pnpm install
-pnpm dev
+El nombre `frontend/dockerfile` está escrito en minúsculas y debe conservarse así en sistemas Linux.
+
+## Topología
+
+### Desarrollo: `compose.dev.yaml`
+
+```text
+Navegador
+   ├── localhost:5173 → app/Vite
+   └── localhost:8000 → api/Django runserver
+                              │
+                              ▼
+                         db/PostgreSQL
 ```
 
-Abrir <http://localhost:4321/>.
+### Objetivo: `compose.yaml`
 
-`frontend-astro` combina generación estática con interactividad selectiva:
-
-- La portada, el listado y los detalles de actividades se generan como HTML durante el build.
-- `src/pages/activities/[id].astro` usa `getStaticPaths()` para crear una ruta estática por actividad.
-- `BaseLayout.astro` comparte la estructura HTML, navegación, metadatos y el indicador de modo mediante `Astro.props` y `<slot />`.
-- `EnrollmentPanel.tsx` se incorpora como isla React con `client:load`; solo esta zona se hidrata en el navegador.
-- La isla consulta el estado del participante y permite inscribirse o cancelar mediante la API.
-- La identidad didáctica se valida como UUID, se guarda en `localStorage` y se envía mediante `X-Participant-ID`.
-- El cliente tipado normaliza respuestas, errores de red, estados HTTP `400`, `404`, `409` y `500+`, además de la respuesta `204` de cancelación.
-- La inscripción utiliza `PUT` de forma idempotente: `201` cuando se crea y `200` cuando ya existía.
-- El proxy de Vite permite que el navegador use `/api/v1` sin modificar el backend ni depender de CORS.
-
-Variables opcionales para `frontend-astro`:
-
-| Variable                | Uso                                                                   |
-| ----------------------- | --------------------------------------------------------------------- |
-| `API_BUILD_URL`         | URL absoluta de la API usada por Node durante el build.               |
-| `PUBLIC_API_URL`        | Base de API usada por la isla en el navegador; normalmente `/api/v1`. |
-| `PUBLIC_PARTICIPANT_ID` | UUID precargado del participante de laboratorio.                      |
-
-Comandos principales:
-
-```bash
-cd frontend-astro
-pnpm astro check
-pnpm build
-pnpm preview
+```text
+Navegador
+   │
+   ▼
+localhost:80 → nginx
+                 ├── React compilado
+                 └── /api/* → api/Gunicorn
+                                  │
+                                  ▼
+                             db/PostgreSQL
 ```
 
 ## Puesta en marcha con Docker Compose
@@ -112,7 +123,9 @@ docker compose -f compose.gunicorn.yaml exec api python manage.py seed_activitie
 docker compose -f compose.gunicorn.yaml exec api python manage.py seed_participants_and_enrollments
 ```
 
-En este modo Django se ejecuta con Gunicorn y la API queda temporalmente publicada en <http://127.0.0.1:8000/>. Nginx se incorpora en la etapa siguiente.
+En este modo Django se ejecuta con Gunicorn y la API queda temporalmente publicada en <http://127.0.0.1:8000/>. Es un checkpoint intermedio; la ejecución final usa Nginx como única frontera pública.
+
+Este Compose es un checkpoint de la etapa de servidor de aplicación. La ejecución final se realiza con `compose.yaml`.
 
 La ejecución objetivo completa usa el build de React, Gunicorn, PostgreSQL y Nginx:
 
@@ -132,6 +145,18 @@ docker compose logs -f nginx
 docker compose logs -f api
 ```
 
+Para detener la ejecución objetivo conservando PostgreSQL:
+
+```bash
+docker compose down
+```
+
+Para eliminar también los datos persistidos y comenzar desde cero:
+
+```bash
+docker compose down -v
+```
+
 ## Verificación rápida
 
 ```bash
@@ -139,11 +164,16 @@ cd backend
 python manage.py test
 
 cd ../frontend
+pnpm format
+pnpm lint
 pnpm build
+```
 
-cd ../frontend-astro
-pnpm astro check
-pnpm build
+Para validar la configuración Compose sin iniciar contenedores:
+
+```bash
+docker compose config
+docker compose -f compose.dev.yaml config
 ```
 
 ## API versionada (v1/v2)
@@ -199,11 +229,9 @@ python manage.py test
 
 El proyecto conserva la vista HTML clásica y las implementaciones cliente como
 etapas comparables. El backend Django expone la API JSON documentada en
-`API.md`; `frontend/` permite trabajar con Vite + React y `frontend-astro/`
-muestra la diferencia entre HTML generado en build e interactividad hidratada
-por Astro. Para observar la arquitectura híbrida, desactivar JavaScript deja
-visible el contenido estático de actividades, mientras la isla de inscripción
-queda en su estado inicial.
+`API.md`; `frontend/` permite trabajar con Vite + React. Para observar la
+arquitectura híbrida del backend clásico, desactivar JavaScript deja visible
+el contenido HTML producido por Django.
 
 ## Instrucciones para agentes
 
