@@ -104,6 +104,16 @@ Para detener ambos servicios:
 docker compose -f compose.dev.yaml down
 ```
 
+Para probar el servidor de aplicación sin Vite:
+
+```bash
+docker compose -f compose.gunicorn.yaml up --build -d
+docker compose -f compose.gunicorn.yaml exec api python manage.py seed_activities
+docker compose -f compose.gunicorn.yaml exec api python manage.py seed_participants_and_enrollments
+```
+
+En este modo Django se ejecuta con Gunicorn y la API queda temporalmente publicada en <http://127.0.0.1:8000/>. Nginx se incorpora en la etapa siguiente.
+
 ## Verificación rápida
 
 ```bash
