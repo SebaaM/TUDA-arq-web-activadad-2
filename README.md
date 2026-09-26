@@ -114,6 +114,24 @@ docker compose -f compose.gunicorn.yaml exec api python manage.py seed_participa
 
 En este modo Django se ejecuta con Gunicorn y la API queda temporalmente publicada en <http://127.0.0.1:8000/>. Nginx se incorpora en la etapa siguiente.
 
+La ejecución objetivo completa usa el build de React, Gunicorn, PostgreSQL y Nginx:
+
+```bash
+docker compose up --build -d
+docker compose exec api python manage.py seed_activities
+docker compose exec api python manage.py seed_participants_and_enrollments
+```
+
+El navegador debe utilizar solamente <http://localhost/>. En este modo solo Nginx publica un puerto; Django y PostgreSQL permanecen en la red interna.
+
+Para observar la topología:
+
+```bash
+docker compose ps
+docker compose logs -f nginx
+docker compose logs -f api
+```
+
 ## Verificación rápida
 
 ```bash

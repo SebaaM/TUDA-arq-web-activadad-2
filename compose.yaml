@@ -5,10 +5,8 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
       POSTGRES_DB: "${POSTGRES_DB}"
-    ports:
-      - 5432:5432
     volumes:
-      - untdf-pgdata:/var/lib/postgresql/data
+      - untdf-pgdata-target:/var/lib/postgresql/data
     networks:
       - untdf-app
     healthcheck:
@@ -24,16 +22,14 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,api"
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - 8000:8000
-    command: >-
-      sh -c "python manage.py migrate --noinput &&
-      python manage.py runserver 0.0.0.0:8000"
-    volumes:
-      - ./backend:/app
+    expose:
+      - "8000"
     networks:
       - untdf-app
     healthcheck:
@@ -42,29 +38,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
 
-  app:
+  nginx:
     build:
       context: ./frontend
       dockerfile: dockerfile
-      target: development
-    environment:
-      VITE_PROXY_TARGET: "${VITE_PROXY_TARGET}"
+      target: production
     depends_on:
       api:
         condition: service_healthy
     ports:
-      - 5173:5173
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
+      - "80:80"
     networks:
       - untdf-app
 
 volumes:
-  untdf-pgdata:
-  frontend_node_modules:
+  untdf-pgdata-target:
 
 networks:
   untdf-app:
