@@ -48,6 +48,7 @@ services:
     build:
       context: ./frontend
       dockerfile: dockerfile
+      target: development
     environment:
       VITE_PROXY_TARGET: "${VITE_PROXY_TARGET}"
     depends_on:
